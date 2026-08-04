@@ -5,10 +5,11 @@ import 'package:flutter/services.dart';
 import '../../theme/forest_palette.dart';
 import 'forest_painter.dart';
 
-/// Your quiet hideout in the woods. Soft light. Soft shared presence.
+/// Moonlit lakeside. Soft water. Shared only by the quiet count.
 class ForestScene extends StatefulWidget {
   const ForestScene({super.key, this.presenceCount = 127});
 
+  /// People currently resting in this same moment, worldwide.
   final int presenceCount;
 
   @override
@@ -44,7 +45,7 @@ class _ForestSceneState extends State<ForestScene>
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.dark,
+        statusBarIconBrightness: Brightness.light,
         systemNavigationBarColor: Colors.transparent,
       ),
     );
@@ -92,7 +93,8 @@ class _ForestSceneState extends State<ForestScene>
     final to = _mossTo;
     if (changeAt == null || to == null) return;
 
-    final total = ForestPainter.mossEraseSeconds +
+    final total =
+        ForestPainter.mossEraseSeconds +
         ForestPainter.mossPauseSeconds +
         ForestPainter.mossWriteSeconds;
     if (t - changeAt < total) return;

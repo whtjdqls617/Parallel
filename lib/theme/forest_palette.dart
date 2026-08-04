@@ -1,41 +1,57 @@
 import 'package:flutter/material.dart';
 
-/// Forest hideout — warm greens, soft morning light.
+/// Moonlit lakeside — deep night blues, cool cyan light on water.
+/// Seated on the near shore; presence is warm against the cold night.
 abstract final class ForestPalette {
-  static const sunCore = Color(0xFFFFFFF8);
-  static const sunGlow = Color(0xFFFFEAB8);
-  static const sunWarm = Color(0xFFE8D498);
+  static const skyTop = Color(0xFF0A1428);
+  static const skyMid = Color(0xFF122038);
+  static const skyHorizon = Color(0xFF152840);
 
-  static const airTop = Color(0xFF7AAA78);
-  static const airMid = Color(0xFF8ABA80);
-  static const airDeep = Color(0xFF5A8A60);
+  static const moonCore = Color(0xFFF0F8FF);
+  static const moonGlow = Color(0xFFA8D8F0);
+  static const moonHalo = Color(0x6680C8E8);
 
-  static const canopyFar = Color(0xFF6A9A68);
-  static const canopyMid = Color(0xFF5A8A58);
-  static const canopyNear = Color(0xFF4A7A4A);
-  static const canopyLit = Color(0xFF8ABA60);
-  static const canopySun = Color(0xFFC4DC80);
+  static const star = Color(0xFFE8F4FF);
+  static const mist = Color(0x4CA0C8E0);
+  static const cloud = Color(0x33406080);
 
-  static const shade = Color(0xFF3A5A42);
-  static const shadeDeep = Color(0xFF2A4A38);
+  static const waterDeep = Color(0xFF0A2038);
+  static const water = Color(0xFF143858);
+  static const waterLit = Color(0xFF2A6890);
+  static const waterMoon = Color(0xFF70D0E8);
+  static const waterFoam = Color(0xFF98E0F0);
 
-  static const mossSun = Color(0xFFD0E488);
-  static const mossLit = Color(0xFFA8C868);
-  static const moss = Color(0xFF7A9A58);
-  static const mossDeep = Color(0xFF5A7A48);
+  static const pineFar = Color(0xFF142838);
+  static const pineMid = Color(0xFF102030);
+  static const pineNear = Color(0xFF0C1C28);
+  static const pineDeep = Color(0xFF081418);
+  static const pineLit = Color(0xFF244858);
 
-  static const mote = Color(0xFFE8F4A8);
-  static const moteCore = Color(0xFFFFFFF4);
-  static const comfort = Color(0xFFD8E8A8);
+  static const bank = Color(0xFF1A281C);
+  static const bankLit = Color(0xFF2E483C);
+  static const bankMoon = Color(0xFF4A7080);
+  static const bankDeep = Color(0xFF0E1410);
+  static const grass = Color(0xFF243830);
+  static const grassLit = Color(0xFF4A7064);
+  static const grassMoon = Color(0xFF78A8A8);
 
-  /// Presence lights — warm orange company in the hollow.
-  static const presence = Color(0xFFFFB060);
-  static const presenceGlow = Color(0xFFFFC878);
-  static const presenceCore = Color(0xFFFFF4E8);
+  static const rock = Color(0xFF1A2228);
+  static const rockLit = Color(0xFF2A3840);
+  static const rockDeep = Color(0xFF0A1014);
 
-  static const earth = Color(0xFF3A4A30);
-  static const earthDeep = Color(0xFF283028);
+  static const shadeDeep = Color(0xFF040810);
+  static const comfort = Color(0xFF406888);
+  static const mote = Color(0xFFC8E8F8);
 
-  static const canvas = Color(0xFF7AAA78);
-  static const presenceInk = Color(0xFF2A3A28);
+  /// Presence — soft green fireflies drifting over the lake.
+  static const presence = Color(0xFF9CF070);
+  static const presenceGlow = Color(0xFFC8FFA8);
+  static const presenceCore = Color(0xFFF4FFE8);
+
+  static const canvas = Color(0xFF0A1428);
+  static const presenceInk = Color(0xFFA0C8D8);
+
+  static const mossDeep = Color(0xFF0A1820);
+  static const mossLit = Color(0xFF3A6070);
+  static const canopySun = Color(0xFF80C8E0);
 }

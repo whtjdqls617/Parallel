@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 
 import '../../theme/forest_palette.dart';
 
-/// Small moss hideout — room-scale forms you can read, not color washes.
-/// Ceiling, walls, trunks, moss floor. Soft light on real shapes.
+/// Moonlit lakeside — dark pines, cool water, a path of moonlight.
+/// Soft breath. Green fireflies for shared presence.
 class ForestPainter extends CustomPainter {
   ForestPainter({
     required this.t,
@@ -31,394 +31,651 @@ class ForestPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final breath = 0.5 + 0.5 * math.sin(t * (math.pi * 2 / breathPeriod));
-    final wind = math.sin(t * 0.12) * 0.45 + math.sin(t * 0.05) * 0.55;
-    final sway = math.sin(t * 0.07) * 0.005;
-    final pocket = Offset(size.width * 0.5, size.height * 0.40);
+    final wind = math.sin(t * 0.1) * 0.4 + math.sin(t * 0.04) * 0.5;
+    final moon = Offset(size.width * 0.5, size.height * 0.16);
+    final waterTop = size.height * 0.48;
+    final shoreY = size.height * 0.58;
+    // Slight underlap so the join stays seamless — no raised bank.
+    final waterBottom = shoreY + size.height * 0.02;
 
-    _paintRoomAir(canvas, size, breath: breath);
+    _paintNightSky(canvas, size, breath: breath);
+    _paintStars(canvas, size, breath: breath);
+    _paintMoon(canvas, size, moon: moon, breath: breath);
+    _paintNightClouds(canvas, size, moon: moon);
 
-    // Back hedge wall — lobed silhouette a few meters away.
-    _paintBackHedge(canvas, size, wind: wind, sway: sway);
+    // Soft mass behind pines — fills gaps without a black wall.
+    _paintForestBackfill(canvas, size);
 
-    // Soft pocket light between walls (glow only — forms stay sharp).
-    _paintPocketGlow(canvas, size, pocket: pocket, breath: breath);
-
-    // Leaf ceiling clusters — hanging shapes with readable bottoms.
-    _paintCanopyClusters(canvas, size, wind: wind, sway: sway, breath: breath);
-
-    // Side thickets — close walls of the room.
-    _paintSideThicket(canvas, size, left: true, wind: wind, sway: sway);
-    _paintSideThicket(canvas, size, left: false, wind: wind, sway: sway);
-
-    // Trunks — solid pillars.
-    _paintTrunk(
+    _paintPineBand(
       canvas,
       size,
-      base: Offset(
-        size.width * 0.11 + sway * size.width * 0.3,
-        size.height * 0.78,
-      ),
-      height: size.height * 0.72,
-      widthBase: size.width * 0.07,
-      lean: 0.018,
-      litSide: 1,
+      baseY: size.height * 0.36,
+      height: size.height * 0.14,
+      color: ForestPalette.pineFar,
+      seed: 3,
+      density: 20,
+      wind: wind * 0.12,
+      fade: 0.2,
+    );
+    _paintPineBand(
+      canvas,
+      size,
+      baseY: size.height * 0.40,
+      height: size.height * 0.16,
+      color: ForestPalette.pineMid,
+      seed: 7,
+      density: 19,
+      wind: wind * 0.2,
+      fade: 0.08,
+    );
+    // Far bank under the pines — soil, not cool gray mist.
+    _paintBankStrip(canvas, size, y: size.height * 0.43, h: size.height * 0.07);
+    _paintPineBand(
+      canvas,
+      size,
+      baseY: size.height * 0.45,
+      height: size.height * 0.12,
+      color: ForestPalette.pineNear,
+      seed: 11,
+      density: 17,
+      wind: wind * 0.28,
+      fade: 0.0,
+    );
+
+    _paintLake(
+      canvas,
+      size,
+      waterTop: waterTop,
+      waterBottom: waterBottom,
+      shoreY: shoreY,
+      moon: moon,
+      breath: breath,
       wind: wind,
     );
-    _paintTrunk(
+    _paintPresenceOnWater(
       canvas,
       size,
-      base: Offset(
-        size.width * 0.89 - sway * size.width * 0.3,
-        size.height * 0.80,
-      ),
-      height: size.height * 0.74,
-      widthBase: size.width * 0.075,
-      lean: -0.016,
-      litSide: -1,
+      waterTop: waterTop,
+      waterBottom: shoreY,
+      breath: breath,
       wind: wind,
     );
+    _paintMist(canvas, size, y: waterTop + 8, strength: 0.22, breath: breath);
 
-    // Near leaf tufts at trunk bases / wall edge.
-    _paintNearLeafTufts(canvas, size, wind: wind, sway: sway);
+    _paintNearShore(canvas, size, startY: shoreY, wind: wind);
+    _paintShorePlants(canvas, size, wind: wind);
+    _paintRocks(canvas, size, breath: breath);
 
-    final mossPath = _paintMossFloor(
-      canvas,
-      size,
-      startY: size.height * 0.54,
-      wind: wind,
-    );
-    _paintMossGrain(
-      canvas,
-      size,
-      mossPath: mossPath,
-      startY: size.height * 0.54,
-    );
-    _paintMossContours(canvas, size, startY: size.height * 0.56, wind: wind);
-    _paintNearGrass(canvas, size, startY: size.height * 0.58, wind: wind);
-    _paintDapples(canvas, size, breath: breath);
-
-    _paintMotes(canvas, size, breath: breath, pocket: pocket);
-    _paintPresenceInMoss(canvas, size, breath: breath);
     _paintPresenceSpirits(canvas, size, breath: breath);
     _paintComfortGlow(canvas, size, breath);
-    _paintRoomVignette(canvas, size, breath);
+    _paintVignette(canvas, size, breath);
   }
 
-  void _paintRoomAir(Canvas canvas, Size size, {required double breath}) {
+  void _paintNightSky(Canvas canvas, Size size, {required double breath}) {
     canvas.drawRect(
       Offset.zero & size,
       Paint()
         ..shader = ui.Gradient.linear(
           Offset(size.width * 0.5, 0),
-          Offset(size.width * 0.5, size.height),
+          Offset(size.width * 0.5, size.height * 0.55),
           [
-            ForestPalette.shadeDeep,
-            ForestPalette.shade,
-            ForestPalette.airDeep,
-            ForestPalette.airMid,
+            ForestPalette.skyTop,
+            ForestPalette.skyMid,
+            Color.lerp(
+              ForestPalette.skyHorizon,
+              ForestPalette.moonGlow,
+              0.08 + breath * 0.04,
+            )!,
           ],
-          const [0.0, 0.25, 0.55, 1.0],
+          const [0.0, 0.5, 1.0],
         ),
-    );
-    // Warm center — still a fill, forms will sit on top.
-    canvas.drawCircle(
-      Offset(size.width * 0.5, size.height * 0.42),
-      size.width * 0.28,
-      Paint()
-        ..color = ForestPalette.sunGlow.withValues(alpha: 0.12 + breath * 0.05),
     );
   }
 
-  /// Back wall as a lobed hedge — silhouette first, then soft fill on it.
-  void _paintBackHedge(
-    Canvas canvas,
-    Size size, {
-    required double wind,
-    required double sway,
-  }) {
-    final swayX = sway * size.width * 0.12;
-    final baseY = size.height * 0.52;
-    final topY = size.height * 0.14;
-
-    // Lobed crest across the back — readable bush tops, not a mountain ridge.
-    final lobes = <({double u, double h, double w})>[
-      (u: 0.06, h: 0.72, w: 0.11),
-      (u: 0.18, h: 0.95, w: 0.13),
-      (u: 0.32, h: 0.78, w: 0.12),
-      (u: 0.46, h: 0.62, w: 0.14),
-      (u: 0.58, h: 0.68, w: 0.12),
-      (u: 0.72, h: 0.88, w: 0.13),
-      (u: 0.86, h: 0.96, w: 0.12),
-      (u: 0.96, h: 0.74, w: 0.10),
-    ];
-
-    final path = Path()..moveTo(-20, size.height * 0.7);
-    path.lineTo(-20, baseY);
-
-    // Build lobed top edge left → right.
-    for (final lobe in lobes) {
-      final cx = size.width * lobe.u + swayX;
-      final cy = ui.lerpDouble(baseY, topY, lobe.h)!;
-      final rx = size.width * lobe.w;
-      final ry = size.height * 0.08 * lobe.h;
-      // Approximate lobe with a soft arc bump.
-      path.quadraticBezierTo(
-        cx - rx * 0.35,
-        cy + ry * 0.2,
-        cx,
-        cy - ry * 0.15 + math.sin(t * 0.1 + lobe.u * 4) * wind * 2,
-      );
-      path.quadraticBezierTo(
-        cx + rx * 0.35,
-        cy + ry * 0.2,
-        cx + rx * 0.55,
-        ui.lerpDouble(baseY, topY, lobe.h * 0.7)!,
-      );
-    }
-    path.lineTo(size.width + 20, baseY);
-    path.lineTo(size.width + 20, size.height * 0.7);
-    path.close();
-
-    // Solid body — no blur. Value does the softness.
-    canvas.drawPath(
-      path,
-      Paint()
-        ..shader = ui.Gradient.linear(
-          Offset(0, topY),
-          Offset(0, baseY + size.height * 0.08),
-          [
-            ForestPalette.shadeDeep,
-            ForestPalette.canopyNear,
-            ForestPalette.canopyMid,
-            ForestPalette.canopyLit,
-          ],
-          const [0.0, 0.35, 0.7, 1.0],
-        ),
-    );
-
-    // Lit rims on lobe tops — makes bushes read.
-    for (final lobe in lobes) {
-      final cx = size.width * lobe.u + swayX;
-      final cy =
-          ui.lerpDouble(baseY, topY, lobe.h)! -
-          size.height * 0.02 +
-          math.sin(t * 0.1 + lobe.u * 4) * wind * 2;
-      final rx = size.width * lobe.w * 0.85;
-      canvas.drawOval(
-        Rect.fromCenter(
-          center: Offset(cx, cy),
-          width: rx * 1.6,
-          height: size.height * 0.035,
-        ),
-        Paint()..color = ForestPalette.canopySun.withValues(alpha: 0.22),
-      );
-      // Dark under-lobe.
-      canvas.drawOval(
-        Rect.fromCenter(
-          center: Offset(cx, cy + size.height * 0.04),
-          width: rx * 1.4,
-          height: size.height * 0.05,
-        ),
-        Paint()..color = ForestPalette.shadeDeep.withValues(alpha: 0.28),
-      );
-    }
-
-    // A few mid trunks peeking through the hedge — thin, quiet.
-    final rng = math.Random(11);
-    for (var i = 0; i < 5; i++) {
-      final u = 0.2 + i * 0.15 + (rng.nextDouble() - 0.5) * 0.04;
-      if ((u - 0.5).abs() < 0.08) continue;
-      final x = size.width * u;
-      final top = size.height * (0.28 + rng.nextDouble() * 0.08);
-      final bot = baseY + size.height * 0.02;
-      final w = size.width * (0.01 + rng.nextDouble() * 0.006);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTRB(x - w * 0.4, top, x + w * 0.4, bot),
-          Radius.circular(w),
-        ),
+  void _paintStars(Canvas canvas, Size size, {required double breath}) {
+    final rng = math.Random(91);
+    for (var i = 0; i < 20; i++) {
+      final x = rng.nextDouble() * size.width;
+      final y = rng.nextDouble() * size.height * 0.42;
+      final twinkle =
+          0.45 +
+          0.55 *
+              math
+                  .pow(
+                    (0.5 + 0.5 * math.sin(t * (0.4 + rng.nextDouble()) + i))
+                        .clamp(0.0, 1.0),
+                    1.5,
+                  )
+                  .toDouble();
+      final r = 0.4 + rng.nextDouble() * 1.1;
+      canvas.drawCircle(
+        Offset(x, y),
+        r,
         Paint()
-          ..shader = ui.Gradient.linear(
-            Offset(x, top),
-            Offset(x, bot),
-            [
-              const Color(0xFF2A2420).withValues(alpha: 0.0),
-              const Color(0xFF2A2420).withValues(alpha: 0.45),
-              const Color(0xFF2A2420).withValues(alpha: 0.25),
-            ],
-            const [0.0, 0.25, 1.0],
+          ..color = ForestPalette.star.withValues(
+            alpha: (0.25 + twinkle * 0.55) * (0.85 + breath * 0.15),
           ),
       );
     }
   }
 
-  void _paintPocketGlow(
+  void _paintMoon(
     Canvas canvas,
     Size size, {
-    required Offset pocket,
+    required Offset moon,
     required double breath,
   }) {
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: pocket,
-        width: size.width * 0.5,
-        height: size.height * 0.36,
-      ),
+    final r = size.shortestSide * (0.055 + breath * 0.004);
+
+    canvas.drawCircle(
+      moon,
+      r * 7.5,
       Paint()
-        ..shader = ui.Gradient.radial(pocket, size.width * 0.28, [
-          ForestPalette.mossSun.withValues(alpha: 0.16 + breath * 0.06),
-          ForestPalette.mossSun.withValues(alpha: 0.0),
+        ..shader = ui.Gradient.radial(moon, r * 7.5, [
+          ForestPalette.moonHalo.withValues(alpha: 0.45 + breath * 0.1),
+          ForestPalette.moonHalo.withValues(alpha: 0.0),
+        ]),
+    );
+    canvas.drawCircle(
+      moon,
+      r * 2.6,
+      Paint()
+        ..shader = ui.Gradient.radial(moon, r * 2.6, [
+          ForestPalette.moonGlow.withValues(alpha: 0.7),
+          ForestPalette.moonGlow.withValues(alpha: 0.0),
+        ]),
+    );
+    canvas.drawCircle(
+      moon,
+      r,
+      Paint()
+        ..shader = ui.Gradient.radial(moon, r, const [
+          ForestPalette.moonCore,
+          ForestPalette.moonGlow,
         ]),
     );
   }
 
-  /// Hanging leaf masses — each cluster is a lobed shape with a clear bottom.
-  void _paintCanopyClusters(
-    Canvas canvas,
-    Size size, {
-    required double wind,
-    required double sway,
-    required double breath,
-  }) {
-    final swayX = sway * size.width * 0.25;
-    final clusters = <({double u, double y, double s, int seed})>[
-      (u: 0.08, y: 0.02, s: 1.15, seed: 2),
-      (u: 0.22, y: 0.0, s: 1.0, seed: 5),
-      (u: 0.38, y: 0.04, s: 0.85, seed: 8),
-      (u: 0.52, y: 0.06, s: 0.75, seed: 11),
-      (u: 0.66, y: 0.03, s: 0.9, seed: 14),
-      (u: 0.80, y: 0.0, s: 1.05, seed: 17),
-      (u: 0.94, y: 0.02, s: 1.1, seed: 20),
-      (u: 0.30, y: -0.02, s: 0.7, seed: 23),
-      (u: 0.70, y: -0.03, s: 0.72, seed: 26),
+  void _paintNightClouds(Canvas canvas, Size size, {required Offset moon}) {
+    final clouds = <({double u, double v, double s})>[
+      (u: 0.28, v: 0.14, s: 1.1),
+      (u: 0.62, v: 0.12, s: 0.9),
+      (u: 0.78, v: 0.18, s: 0.75),
     ];
-
-    for (final c in clusters) {
-      final cx = size.width * c.u + swayX;
-      final cy = size.height * c.y + math.sin(t * 0.12 + c.u * 5) * wind * 2.5;
-      final path = _lobedCluster(
-        center: Offset(cx, cy),
-        rx: size.width * 0.14 * c.s,
-        ry: size.height * 0.1 * c.s,
-        seed: c.seed,
-        hang: true,
-      );
-
-      canvas.drawPath(
-        path,
+    for (final c in clouds) {
+      final cx = size.width * c.u + math.sin(t * 0.025 + c.u) * 3;
+      final cy = size.height * c.v;
+      final rx = size.width * 0.1 * c.s;
+      final ry = size.height * 0.025 * c.s;
+      // Backlit edge near moon.
+      final nearMoon = (Offset(cx, cy) - moon).distance / size.shortestSide;
+      final glow = (1.0 - nearMoon.clamp(0.0, 1.0)) * 0.35;
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(cx, cy),
+          width: rx * 2.2,
+          height: ry * 2,
+        ),
         Paint()
-          ..shader = ui.Gradient.linear(
-            Offset(cx, cy - size.height * 0.08 * c.s),
-            Offset(cx, cy + size.height * 0.12 * c.s),
-            [
-              ForestPalette.shadeDeep,
-              ForestPalette.canopyNear,
-              ForestPalette.canopyLit.withValues(alpha: 0.85 + breath * 0.05),
-            ],
-            const [0.0, 0.45, 1.0],
-          ),
+          ..color = ForestPalette.cloud
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
       );
-
-      // Bright underside flecks — leaf catching light from the pocket.
-      final rng = math.Random(c.seed + 3);
-      for (var i = 0; i < 4; i++) {
-        final lx = cx + (rng.nextDouble() - 0.5) * size.width * 0.1 * c.s;
-        final ly = cy + size.height * (0.02 + rng.nextDouble() * 0.05) * c.s;
+      if (glow > 0.05) {
         canvas.drawOval(
           Rect.fromCenter(
-            center: Offset(lx, ly),
-            width: size.width * 0.04 * c.s,
-            height: size.height * 0.018 * c.s,
+            center: Offset(cx, cy - ry * 0.3),
+            width: rx * 1.4,
+            height: ry,
           ),
-          Paint()..color = ForestPalette.canopySun.withValues(alpha: 0.28),
+          Paint()
+            ..color = ForestPalette.moonGlow.withValues(alpha: glow)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
         );
       }
     }
   }
 
-  /// Side thicket wall — lobed bushes stacked at the edge.
-  void _paintSideThicket(
+  void _paintMist(
     Canvas canvas,
     Size size, {
-    required bool left,
-    required double wind,
-    required double sway,
+    required double y,
+    required double strength,
+    required double breath,
   }) {
-    final dir = left ? 1.0 : -1.0;
-    final swayX = sway * size.width * 0.18 * dir;
-    final bushes = <({double y, double reach, double s, int seed})>[
-      (y: 0.12, reach: 0.28, s: 1.1, seed: left ? 31 : 41),
-      (y: 0.28, reach: 0.38, s: 1.25, seed: left ? 33 : 43),
-      (y: 0.44, reach: 0.34, s: 1.05, seed: left ? 35 : 45),
-      (y: 0.58, reach: 0.30, s: 0.95, seed: left ? 37 : 47),
-      (y: 0.20, reach: 0.18, s: 0.7, seed: left ? 39 : 49),
-    ];
-
-    for (final b in bushes) {
-      final cx =
-          (left ? 0.0 : size.width) +
-          dir * size.width * b.reach +
-          swayX +
-          math.sin(t * 0.1 + b.y * 3) * wind * 2 * dir;
-      final cy = size.height * b.y;
-      final path = _lobedCluster(
-        center: Offset(cx, cy),
-        rx: size.width * 0.16 * b.s,
-        ry: size.height * 0.11 * b.s,
-        seed: b.seed,
-        hang: false,
-      );
-
-      canvas.drawPath(
-        path,
-        Paint()
-          ..shader = ui.Gradient.linear(
-            Offset(left ? 0 : size.width, cy),
-            Offset(size.width * (left ? 0.4 : 0.6), cy),
-            [
-              ForestPalette.shadeDeep,
-              ForestPalette.canopyNear,
-              ForestPalette.canopyLit,
-              ForestPalette.canopySun.withValues(alpha: 0.5),
-            ],
-            const [0.0, 0.35, 0.75, 1.0],
-          ),
-      );
-
-      // Rim light on the room-facing edge.
-      final rimX = cx + dir * size.width * 0.05 * b.s;
-      canvas.drawOval(
-        Rect.fromCenter(
-          center: Offset(rimX, cy),
-          width: size.width * 0.05 * b.s,
-          height: size.height * 0.08 * b.s,
+    canvas.drawRect(
+      Rect.fromLTWH(0, y - size.height * 0.04, size.width, size.height * 0.12),
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset(0, y - size.height * 0.04),
+          Offset(0, y + size.height * 0.08),
+          [
+            ForestPalette.mist.withValues(alpha: 0.0),
+            ForestPalette.mist.withValues(
+              alpha: strength * (0.7 + breath * 0.2),
+            ),
+            ForestPalette.mist.withValues(alpha: 0.0),
+          ],
+          const [0.0, 0.45, 1.0],
         ),
-        Paint()..color = ForestPalette.canopySun.withValues(alpha: 0.2),
+    );
+  }
+
+  /// Soft fill behind pines — closes gaps without crushing the night.
+  void _paintForestBackfill(Canvas canvas, Size size) {
+    final path = Path()..moveTo(-20, size.height * 0.5);
+    const n = 28;
+    for (var i = 0; i <= n; i++) {
+      final u = i / n;
+      final x = -20 + (size.width + 40) * u;
+      final y =
+          size.height *
+          (0.30 +
+              0.05 * math.sin(u * math.pi * 3.2) +
+              0.02 * math.sin(u * math.pi * 7));
+      path.lineTo(x, y);
+    }
+    path
+      ..lineTo(size.width + 20, size.height * 0.5)
+      ..close();
+
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset(0, size.height * 0.28),
+          Offset(0, size.height * 0.48),
+          [
+            ForestPalette.pineFar.withValues(alpha: 0.62),
+            ForestPalette.pineMid.withValues(alpha: 0.8),
+            ForestPalette.pineNear.withValues(alpha: 0.88),
+          ],
+          const [0.0, 0.5, 1.0],
+        ),
+    );
+  }
+
+  void _paintBankStrip(
+    Canvas canvas,
+    Size size, {
+    required double y,
+    required double h,
+  }) {
+    final path = Path()..moveTo(-10, y + h);
+    const n = 28;
+    for (var i = 0; i <= n; i++) {
+      final u = i / n;
+      path.lineTo(
+        -10 + (size.width + 20) * u,
+        y + math.sin(u * math.pi * 3) * h * 0.12,
+      );
+    }
+    path
+      ..lineTo(size.width + 10, y + h)
+      ..close();
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset(0, y),
+          Offset(0, y + h),
+          [
+            Color.lerp(ForestPalette.bankLit, ForestPalette.bankMoon, 0.2)!,
+            ForestPalette.bank,
+            ForestPalette.bankDeep,
+          ],
+          const [0.0, 0.4, 1.0],
+        ),
+    );
+  }
+
+  void _paintPineBand(
+    Canvas canvas,
+    Size size, {
+    required double baseY,
+    required double height,
+    required Color color,
+    required int seed,
+    required int density,
+    required double wind,
+    required double fade,
+  }) {
+    final rng = math.Random(seed);
+    final washed = Color.lerp(color, ForestPalette.skyHorizon, fade * 0.45)!;
+    final lit = Color.lerp(washed, ForestPalette.pineLit, 0.32)!;
+
+    for (var i = 0; i < density; i++) {
+      final u = (i + rng.nextDouble() * 0.28) / density;
+      final x = size.width * (u * 1.1 - 0.03);
+      final h = height * (0.75 + rng.nextDouble() * 0.35);
+      final w = size.width * (0.028 + rng.nextDouble() * 0.02) * (h / height);
+      final sway = math.sin(t * 0.07 + i * 0.4) * wind * 2.5;
+      _pineTree(
+        canvas,
+        tip: Offset(x + sway, baseY - h),
+        base: Offset(x, baseY + height * 0.06),
+        halfW: w,
+        color: washed,
+        lit: lit,
+        seed: seed + i,
       );
     }
   }
 
-  /// Organic foliage cluster — scalloped oval silhouette.
-  Path _lobedCluster({
+  void _pineTree(
+    Canvas canvas, {
+    required Offset tip,
+    required Offset base,
+    required double halfW,
+    required Color color,
+    required Color lit,
+    required int seed,
+  }) {
+    final rng = math.Random(seed);
+    final h = base.dy - tip.dy;
+    final tiers = 3 + rng.nextInt(2);
+    for (var ti = 0; ti < tiers; ti++) {
+      final u0 = ti / tiers;
+      final u1 = (ti + 1) / tiers;
+      final top = Offset(tip.dx, tip.dy + h * u0 * 0.92);
+      final botY = tip.dy + h * (u1 * 0.85 + 0.12);
+      final hw = halfW * (0.45 + u1 * 0.7);
+      final path = Path()..moveTo(top.dx, top.dy);
+      const steps = 5;
+      for (var s = 1; s <= steps; s++) {
+        final v = s / steps;
+        final jagged = (s.isEven ? 0.72 : 1.0) * hw;
+        path.lineTo(tip.dx - jagged, ui.lerpDouble(top.dy, botY, v)!);
+      }
+      for (var s = steps; s >= 1; s--) {
+        final v = s / steps;
+        final jagged = (s.isEven ? 0.72 : 1.0) * hw;
+        path.lineTo(tip.dx + jagged, ui.lerpDouble(top.dy, botY, v)!);
+      }
+      path.close();
+      canvas.drawPath(
+        path,
+        Paint()
+          ..shader = ui.Gradient.linear(
+            Offset(tip.dx - hw, top.dy),
+            Offset(tip.dx + hw, botY),
+            [lit, color, Color.lerp(color, ForestPalette.pineDeep, 0.4)!],
+            const [0.0, 0.45, 1.0],
+          ),
+      );
+    }
+  }
+
+  void _paintLake(
+    Canvas canvas,
+    Size size, {
+    required double waterTop,
+    required double waterBottom,
+    required double shoreY,
+    required Offset moon,
+    required double breath,
+    required double wind,
+  }) {
+    // Flat water plane into the shore — no wavy “hill” lip.
+    canvas.drawRect(
+      Rect.fromLTRB(-2, waterTop, size.width + 2, waterBottom),
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset(0, waterTop),
+          Offset(0, shoreY),
+          [
+            ForestPalette.waterLit,
+            ForestPalette.water,
+            ForestPalette.waterDeep,
+          ],
+          const [0.0, 0.45, 1.0],
+        ),
+    );
+
+    // Soft pine reflections across the water.
+    final rng = math.Random(29);
+    final waterMidH = shoreY - waterTop;
+    for (var i = 0; i < 8; i++) {
+      final x = size.width * (0.1 + rng.nextDouble() * 0.8);
+      final h = waterMidH * (0.3 + rng.nextDouble() * 0.3);
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(x, waterTop + h * 0.4),
+          width: size.width * 0.04,
+          height: h,
+        ),
+        Paint()
+          ..color = ForestPalette.pineDeep.withValues(alpha: 0.22)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      );
+    }
+
+    // Moon path — denser shimmering column of light on the water.
+    final pathTop = Offset(moon.dx, waterTop + 2);
+    final pathBot = Offset(size.width * 0.5, shoreY - 4);
+    final path = Path()
+      ..moveTo(pathTop.dx - size.width * 0.035, pathTop.dy)
+      ..lineTo(pathTop.dx + size.width * 0.035, pathTop.dy)
+      ..lineTo(pathBot.dx + size.width * 0.11, pathBot.dy)
+      ..lineTo(pathBot.dx - size.width * 0.11, pathBot.dy)
+      ..close();
+
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          pathTop,
+          pathBot,
+          [
+            ForestPalette.waterMoon.withValues(alpha: 0.7 + breath * 0.12),
+            ForestPalette.waterMoon.withValues(alpha: 0.4),
+            ForestPalette.waterMoon.withValues(alpha: 0.08),
+          ],
+          const [0.0, 0.4, 1.0],
+        )
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
+    );
+
+    // Second softer wrap — fills gaps so the path doesn't look sparse.
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          pathTop,
+          pathBot,
+          [
+            ForestPalette.moonCore.withValues(alpha: 0.22 + breath * 0.06),
+            ForestPalette.moonGlow.withValues(alpha: 0.1),
+            ForestPalette.moonGlow.withValues(alpha: 0.0),
+          ],
+          const [0.0, 0.5, 1.0],
+        )
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    );
+
+    // Shimmer flecks along the moon path — denser.
+    for (var i = 0; i < 32; i++) {
+      final u = i / 31;
+      final x =
+          ui.lerpDouble(pathTop.dx, pathBot.dx, u)! +
+          math.sin(t * 0.9 + i * 1.1) * (3 + u * 12) * (0.4 + wind.abs());
+      final y = ui.lerpDouble(pathTop.dy, pathBot.dy, u)!;
+      final twinkle =
+          0.35 +
+          0.65 *
+              math
+                  .pow(
+                    (0.5 + 0.5 * math.sin(t * 1.4 + i * 0.7)).clamp(0.0, 1.0),
+                    1.8,
+                  )
+                  .toDouble();
+      canvas.drawCircle(
+        Offset(x, y),
+        1.0 + u * 1.6,
+        Paint()
+          ..color = ForestPalette.moonCore.withValues(
+            alpha: (0.22 + twinkle * 0.5) * (1 - u * 0.25),
+          ),
+      );
+    }
+
+    // Soft horizontal ripples.
+    for (var row = 0; row < 7; row++) {
+      final u = row / 6;
+      final y = ui.lerpDouble(waterTop + 10, shoreY - 10, u)!;
+      final amp = 0.8 + u * 1.8;
+      final rip = Path();
+      const cols = 36;
+      for (var c = 0; c <= cols; c++) {
+        final x = size.width * c / cols;
+        final yy =
+            y +
+            math.sin(c / cols * math.pi * 4 + t * 0.25 + row) *
+                amp *
+                (0.5 + wind.abs());
+        if (c == 0) {
+          rip.moveTo(x, yy);
+        } else {
+          rip.lineTo(x, yy);
+        }
+      }
+      canvas.drawPath(
+        rip,
+        Paint()
+          ..color = ForestPalette.waterFoam.withValues(alpha: 0.06 + u * 0.08)
+          ..strokeWidth = 1.0
+          ..style = PaintingStyle.stroke,
+      );
+    }
+  }
+
+  void _paintNearShore(
+    Canvas canvas,
+    Size size, {
+    required double startY,
+    required double wind,
+  }) {
+    // Soft edge that sits on the water — tiny undulation, no ridge.
+    final path = Path()..moveTo(-20, size.height + 10);
+    const n = 40;
+    for (var i = 0; i <= n; i++) {
+      final u = i / n;
+      final x = -20 + (size.width + 40) * u;
+      final y =
+          startY -
+          size.height * 0.006 +
+          size.height * 0.008 * math.sin(u * math.pi * 1.6) +
+          size.height * 0.003 * math.sin(u * math.pi * 3.4 + t * 0.05) * wind;
+      path.lineTo(x, y);
+    }
+    path
+      ..lineTo(size.width + 20, size.height + 10)
+      ..close();
+
+    canvas.drawPath(
+      path,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset(0, startY - size.height * 0.01),
+          Offset(0, size.height),
+          [
+            Color.lerp(ForestPalette.waterDeep, ForestPalette.bank, 0.55)!,
+            ForestPalette.bank,
+            ForestPalette.bankDeep,
+            ForestPalette.shadeDeep,
+          ],
+          const [0.0, 0.12, 0.48, 1.0],
+        ),
+    );
+
+    // Soft seam blend — kills any leftover gap without building a bank.
+    canvas.drawRect(
+      Rect.fromLTWH(
+        0,
+        startY - size.height * 0.02,
+        size.width,
+        size.height * 0.04,
+      ),
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset(0, startY - size.height * 0.02),
+          Offset(0, startY + size.height * 0.02),
+          [
+            ForestPalette.waterDeep.withValues(alpha: 0.0),
+            ForestPalette.waterDeep.withValues(alpha: 0.35),
+            ForestPalette.bank.withValues(alpha: 0.0),
+          ],
+          const [0.0, 0.45, 1.0],
+        ),
+    );
+  }
+
+  /// Soft rounded shore stones — irregular, not mirrored.
+  void _paintRocks(Canvas canvas, Size size, {required double breath}) {
+    // Left: heavier cluster, varied sizes.
+    _boulder(
+      canvas,
+      center: Offset(size.width * 0.08, size.height * 0.84),
+      rx: size.width * 0.14,
+      ry: size.height * 0.09,
+      litSide: 1,
+    );
+    _boulder(
+      canvas,
+      center: Offset(size.width * 0.2, size.height * 0.9),
+      rx: size.width * 0.08,
+      ry: size.height * 0.05,
+      litSide: 1,
+    );
+    _boulder(
+      canvas,
+      center: Offset(size.width * 0.05, size.height * 0.94),
+      rx: size.width * 0.055,
+      ry: size.height * 0.032,
+      litSide: 1,
+    );
+
+    // Right: fewer, differently placed — no mirror of the left.
+    _boulder(
+      canvas,
+      center: Offset(size.width * 0.91, size.height * 0.86),
+      rx: size.width * 0.11,
+      ry: size.height * 0.07,
+      litSide: -1,
+    );
+    _boulder(
+      canvas,
+      center: Offset(size.width * 0.8, size.height * 0.93),
+      rx: size.width * 0.065,
+      ry: size.height * 0.038,
+      litSide: -1,
+    );
+
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(size.width * 0.12, size.height * 0.8),
+        width: size.width * 0.07,
+        height: size.height * 0.03,
+      ),
+      Paint()
+        ..color = ForestPalette.moonGlow.withValues(alpha: 0.07 + breath * 0.03)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+    );
+  }
+
+  void _boulder(
+    Canvas canvas, {
     required Offset center,
     required double rx,
     required double ry,
-    required int seed,
-    required bool hang,
+    required int litSide,
   }) {
-    final rng = math.Random(seed);
     final path = Path();
-    const n = 14;
+    const n = 20;
     for (var i = 0; i <= n; i++) {
       final a = (i / n) * math.pi * 2 - math.pi / 2;
-      // Hang: flatter top, heavier bottom lobes. Wall: even scallops.
-      final lobe =
-          0.78 +
-          0.22 * math.sin(a * (hang ? 3.5 : 4) + seed) +
-          0.08 * rng.nextDouble();
-      final stretchY = hang && math.sin(a) > 0 ? 1.25 : 1.0;
-      final x = center.dx + math.cos(a) * rx * lobe;
-      final y = center.dy + math.sin(a) * ry * lobe * stretchY;
+      final bump = 1.0 + 0.06 * math.sin(a * 3 + center.dx * 0.01);
+      final x = center.dx + math.cos(a) * rx * bump;
+      final y = center.dy + math.sin(a) * ry * bump;
       if (i == 0) {
         path.moveTo(x, y);
       } else {
@@ -426,448 +683,233 @@ class ForestPainter extends CustomPainter {
       }
     }
     path.close();
-    return path;
-  }
 
-  void _paintTrunk(
-    Canvas canvas,
-    Size size, {
-    required Offset base,
-    required double height,
-    required double widthBase,
-    required double lean,
-    required int litSide,
-    required double wind,
-  }) {
-    final sway = math.sin(t * 0.15) * wind * 1.2;
-    const samples = 24;
-    final left = <Offset>[];
-    final right = <Offset>[];
-    for (var i = 0; i <= samples; i++) {
-      final u = i / samples;
-      final y = base.dy - height * u;
-      final curve =
-          lean * height * u * u +
-          math.sin(u * math.pi) * widthBase * 0.06 +
-          sway * u;
-      final x = base.dx + curve;
-      final half = widthBase * 0.5 * (1.0 - u * 0.52);
-      left.add(Offset(x - half, y));
-      right.add(Offset(x + half, y));
-    }
-
-    final path = Path()..moveTo(left.first.dx, left.first.dy);
-    for (final p in left.skip(1)) {
-      path.lineTo(p.dx, p.dy);
-    }
-    for (final p in right.reversed) {
-      path.lineTo(p.dx, p.dy);
-    }
-    path.close();
-
-    final midX = base.dx + lean * height * 0.3;
-    // Solid trunk — sharp silhouette.
     canvas.drawPath(
       path,
       Paint()
         ..shader = ui.Gradient.linear(
-          Offset(midX - litSide * widthBase * 0.4, base.dy),
-          Offset(midX + litSide * widthBase * 0.4, base.dy),
-          const [Color(0xFF1A1612), Color(0xFF3A322A), Color(0xFF5A4E40)],
+          Offset(center.dx - litSide * rx * 0.5, center.dy - ry * 0.4),
+          Offset(center.dx + litSide * rx * 0.5, center.dy + ry * 0.5),
+          [ForestPalette.rockLit, ForestPalette.rock, ForestPalette.rockDeep],
           const [0.0, 0.4, 1.0],
-        ),
+        )
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2),
     );
 
-    // Bark strokes — readable wood.
-    final bark = math.Random(base.dx.round() + 9);
-    for (var i = 0; i < 10; i++) {
-      final u = 0.1 + bark.nextDouble() * 0.75;
-      final y0 = base.dy - height * u;
-      final half = widthBase * 0.5 * (1.0 - u * 0.52) * 0.7;
-      final x0 = midX + lean * height * u * u;
-      canvas.drawLine(
-        Offset(x0 - half * litSide * 0.2, y0),
-        Offset(x0 + half * 0.6 * litSide, y0 + height * 0.04),
-        Paint()
-          ..color = const Color(0xFF1A1612).withValues(alpha: 0.35)
-          ..strokeWidth = 1.1
-          ..strokeCap = StrokeCap.round,
-      );
-    }
-
-    // Moss collar.
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(base.dx, base.dy - size.height * 0.008),
-        width: widthBase * 2.4,
-        height: size.height * 0.04,
+        center: Offset(center.dx, center.dy + ry * 0.55),
+        width: rx * 1.5,
+        height: ry * 0.35,
       ),
       Paint()
-        ..shader =
-            ui.Gradient.radial(Offset(base.dx, base.dy), widthBase * 1.2, [
-              ForestPalette.canopyLit.withValues(alpha: 0.7),
-              ForestPalette.moss.withValues(alpha: 0.45),
-              ForestPalette.moss.withValues(alpha: 0.0),
-            ]),
-    );
-
-    // Dissolve only the very top into canopy (short fade, still a form).
-    canvas.drawPath(
-      path,
-      Paint()
-        ..shader = ui.Gradient.linear(
-          Offset(midX, base.dy - height),
-          Offset(midX, base.dy - height * 0.72),
-          [
-            ForestPalette.canopyNear.withValues(alpha: 0.85),
-            ForestPalette.canopyNear.withValues(alpha: 0.0),
-          ],
-        ),
+        ..color = ForestPalette.shadeDeep.withValues(alpha: 0.35)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
     );
   }
 
-  void _paintNearLeafTufts(
-    Canvas canvas,
-    Size size, {
-    required double wind,
-    required double sway,
-  }) {
-    final tufts = <({double u, double y, double s, int seed})>[
-      (u: 0.18, y: 0.58, s: 0.55, seed: 61),
-      (u: 0.28, y: 0.62, s: 0.4, seed: 63),
-      (u: 0.72, y: 0.60, s: 0.45, seed: 65),
-      (u: 0.82, y: 0.56, s: 0.58, seed: 67),
+  /// Quiet grass — irregular pockets, including the far edges.
+  void _paintShorePlants(Canvas canvas, Size size, {required double wind}) {
+    // kind: 0 short tuft, 1 tall reed, 2 thin sparse, 3 low carpet.
+    final clumps = <({double u, double v, double s, int kind, int seed})>[
+      // Far left edge.
+      (u: 0.12, v: 0.70, s: 0.48, kind: 1, seed: 41),
+      (u: 0.16, v: 0.66, s: 0.4, kind: 2, seed: 43),
+      (u: 0.18, v: 0.74, s: 0.38, kind: 0, seed: 47),
+
+      // Sparse mid scatter.
+      (u: 0.30, v: 0.64, s: 0.48, kind: 1, seed: 49),
+      (u: 0.40, v: 0.72, s: 0.36, kind: 2, seed: 51),
+      (u: 0.48, v: 0.68, s: 0.32, kind: 0, seed: 53),
+      (u: 0.36, v: 0.84, s: 0.34, kind: 3, seed: 57),
+      (u: 0.56, v: 0.76, s: 0.38, kind: 0, seed: 65),
+      (u: 0.62, v: 0.66, s: 0.42, kind: 2, seed: 67),
+      (u: 0.68, v: 0.80, s: 0.36, kind: 1, seed: 71),
+
+      // Far right edge.
+      (u: 0.84, v: 0.68, s: 0.42, kind: 2, seed: 79),
+      (u: 0.88, v: 0.72, s: 0.46, kind: 1, seed: 77),
+      (u: 0.82, v: 0.78, s: 0.36, kind: 0, seed: 83),
     ];
-    for (final tuft in tufts) {
-      final cx = size.width * tuft.u + sway * size.width * 0.1;
-      final cy =
-          size.height * tuft.y + math.sin(t * 0.14 + tuft.u * 4) * wind * 1.5;
-      final path = _lobedCluster(
-        center: Offset(cx, cy),
-        rx: size.width * 0.1 * tuft.s,
-        ry: size.height * 0.06 * tuft.s,
-        seed: tuft.seed,
-        hang: false,
-      );
-      canvas.drawPath(
-        path,
-        Paint()
-          ..shader = ui.Gradient.linear(
-            Offset(cx, cy - size.height * 0.04),
-            Offset(cx, cy + size.height * 0.04),
-            [
-              ForestPalette.canopyLit,
-              ForestPalette.canopySun,
-              ForestPalette.mossLit,
-            ],
-            const [0.0, 0.5, 1.0],
-          ),
-      );
-    }
-  }
 
-  Path _paintMossFloor(
-    Canvas canvas,
-    Size size, {
-    required double startY,
-    required double wind,
-  }) {
-    final path = Path()..moveTo(-30, size.height + 10);
-    const samples = 48;
-    for (var i = 0; i <= samples; i++) {
-      final u = i / samples;
-      final x = -30 + (size.width + 60) * u;
-      final y =
-          startY +
-          size.height * 0.025 * math.sin(u * math.pi * 1.3) +
-          size.height * 0.012 * math.sin(u * math.pi * 3.2 + t * 0.05) * wind +
-          size.height * 0.035 * math.sin(u * math.pi);
-      path.lineTo(x, y);
-    }
-    path
-      ..lineTo(size.width + 30, size.height + 10)
-      ..close();
+    for (final clump in clumps) {
+      if (_grassHitsRock(clump.u, clump.v)) continue;
 
-    canvas.drawPath(
-      path,
-      Paint()
-        ..shader = ui.Gradient.linear(
-          Offset(0, startY),
-          Offset(0, size.height),
-          [
-            ForestPalette.mossLit,
-            ForestPalette.moss,
-            Color.lerp(ForestPalette.moss, ForestPalette.mossDeep, 0.55)!,
-          ],
-          const [0.0, 0.35, 1.0],
-        ),
-    );
-
-    // Soft crest highlight on the moss lip — reads as a ground edge.
-    final rim = Path();
-    for (var i = 0; i <= samples; i++) {
-      final u = i / samples;
-      final x = -30 + (size.width + 60) * u;
-      final y =
-          startY +
-          size.height * 0.025 * math.sin(u * math.pi * 1.3) +
-          size.height * 0.012 * math.sin(u * math.pi * 3.2 + t * 0.05) * wind +
-          size.height * 0.035 * math.sin(u * math.pi);
-      if (i == 0) {
-        rim.moveTo(x, y);
-      } else {
-        rim.lineTo(x, y);
-      }
-    }
-    canvas.drawPath(
-      rim,
-      Paint()
-        ..color = ForestPalette.mossSun.withValues(alpha: 0.35)
-        ..strokeWidth = 2.2
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round,
-    );
-
-    return path;
-  }
-
-  void _paintMossGrain(
-    Canvas canvas,
-    Size size, {
-    required Path mossPath,
-    required double startY,
-  }) {
-    canvas.save();
-    canvas.clipPath(mossPath);
-    final grain = math.Random(21);
-    for (var i = 0; i < 240; i++) {
-      final x = grain.nextDouble() * size.width;
-      final y = startY + grain.nextDouble() * (size.height - startY);
-      final depth = ((y - startY) / (size.height - startY)).clamp(0.0, 1.0);
-      final r = 0.4 + grain.nextDouble() * 1.15;
-      canvas.drawCircle(
-        Offset(x, y),
-        r,
-        Paint()
-          ..color = grain.nextBool()
-              ? ForestPalette.canopySun.withValues(alpha: 0.1 + depth * 0.12)
-              : ForestPalette.mossDeep.withValues(alpha: 0.08 + depth * 0.12),
-      );
-    }
-    canvas.restore();
-  }
-
-  void _paintMossContours(
-    Canvas canvas,
-    Size size, {
-    required double startY,
-    required double wind,
-  }) {
-    final bottom = size.height * 0.98;
-    const rows = 12;
-    for (var row = 0; row < rows; row++) {
-      final depth = row / (rows - 1);
-      final y0 = ui.lerpDouble(startY, bottom, depth)!;
-      final amp = ui.lerpDouble(1.2, 4.5, depth)! * (0.75 + wind.abs() * 0.3);
-      final freq = ui.lerpDouble(7, 4.5, depth)!;
-      final alpha = ui.lerpDouble(0.07, 0.2, depth)!;
-      final drift = t * (0.08 + depth * 0.05);
-
-      final path = Path();
-      const cols = 42;
-      for (var c = 0; c <= cols; c++) {
-        final u = c / cols;
-        final x = size.width * u;
-        final y =
-            y0 +
-            math.sin(u * math.pi * freq + drift + row * 0.4) * amp +
-            math.sin(u * math.pi * (freq * 0.35) + row) * amp * 0.35;
-        if (c == 0) {
-          path.moveTo(x, y);
-        } else {
-          path.lineTo(x, y);
-        }
-      }
-
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = ForestPalette.canopySun.withValues(alpha: alpha)
-          ..strokeWidth = ui.lerpDouble(0.8, 1.7, depth)!
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round,
-      );
-      canvas.drawPath(
-        path.shift(Offset(0, 1.3 + depth * 0.5)),
-        Paint()
-          ..color = ForestPalette.mossDeep.withValues(alpha: alpha * 0.55)
-          ..strokeWidth = ui.lerpDouble(0.6, 1.2, depth)!
-          ..style = PaintingStyle.stroke,
-      );
-    }
-  }
-
-  void _paintNearGrass(
-    Canvas canvas,
-    Size size, {
-    required double startY,
-    required double wind,
-  }) {
-    final rng = math.Random(37);
-    for (var i = 0; i < 90; i++) {
-      final x = size.width * (0.04 + rng.nextDouble() * 0.92);
-      final y = startY + rng.nextDouble() * (size.height - startY) * 0.9;
-      final depth = ((y - startY) / (size.height - startY)).clamp(0.0, 1.0);
-      final h = ui.lerpDouble(7, 22, depth)! * (0.85 + rng.nextDouble() * 0.3);
+      final rng = math.Random(clump.seed);
+      final cx = size.width * clump.u;
+      final cy = size.height * clump.v;
       final lean =
-          (rng.nextDouble() - 0.5) * 0.45 +
-          math.sin(t * 0.5 + i * 0.2) * wind * 0.15;
-      final blade = Path()
-        ..moveTo(x, y)
-        ..quadraticBezierTo(
-          x + lean * h * 0.5,
-          y - h * 0.55,
-          x + lean * h,
-          y - h,
-        );
-      canvas.drawPath(
-        blade,
-        Paint()
-          ..color =
-              (rng.nextDouble() > 0.4
-                      ? ForestPalette.canopySun
-                      : ForestPalette.canopyLit)
-                  .withValues(alpha: ui.lerpDouble(0.28, 0.65, depth)!)
-          ..strokeWidth = ui.lerpDouble(1.0, 2.0, depth)!
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round,
-      );
-    }
-  }
+          math.sin(t * 0.28 + clump.u * 3 + clump.seed * 0.1) *
+          wind *
+          (clump.kind == 1 ? 0.12 : 0.07);
+      final moonCatch = (1.0 - (clump.u - 0.5).abs() * 1.4).clamp(0.35, 1.0);
 
-  /// Sun through leaves — readable light spots on moss.
-  void _paintDapples(Canvas canvas, Size size, {required double breath}) {
-    final spots = <({double u, double v, double s})>[
-      (u: 0.38, v: 0.62, s: 1.0),
-      (u: 0.52, v: 0.66, s: 1.25),
-      (u: 0.62, v: 0.60, s: 0.8),
-      (u: 0.44, v: 0.72, s: 0.7),
-      (u: 0.58, v: 0.74, s: 0.9),
-    ];
-    for (final s in spots) {
-      final c = Offset(size.width * s.u, size.height * s.v);
-      final pulse = 0.85 + 0.15 * math.sin(t * 0.35 + s.u * 6);
       canvas.drawOval(
         Rect.fromCenter(
-          center: c,
-          width: size.width * 0.14 * s.s * pulse,
-          height: size.height * 0.045 * s.s * pulse,
+          center: Offset(cx, cy + 2),
+          width: size.width * (clump.kind == 3 ? 0.04 : 0.028) * clump.s,
+          height: size.height * (clump.kind == 3 ? 0.008 : 0.006) * clump.s,
         ),
         Paint()
-          ..shader = ui.Gradient.radial(c, size.width * 0.08 * s.s, [
-            ForestPalette.mossSun.withValues(alpha: 0.55 + breath * 0.1),
-            ForestPalette.mossSun.withValues(alpha: 0.0),
-          ]),
+          ..shader = ui.Gradient.radial(
+            Offset(cx, cy),
+            size.width * 0.022 * clump.s,
+            [
+              ForestPalette.grassLit.withValues(alpha: 0.16 * moonCatch),
+              ForestPalette.grass.withValues(alpha: 0.1),
+              ForestPalette.grass.withValues(alpha: 0.0),
+            ],
+            const [0.0, 0.55, 1.0],
+          )
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.8),
       );
+
+      final blades = switch (clump.kind) {
+        1 => 3 + rng.nextInt(2),
+        2 => 2 + rng.nextInt(2),
+        3 => 5 + rng.nextInt(4),
+        _ => 4 + rng.nextInt(3),
+      };
+      final spreadMul = switch (clump.kind) {
+        1 => 0.4,
+        2 => 0.85,
+        3 => 1.0,
+        _ => 0.65,
+      };
+      final lenMul = switch (clump.kind) {
+        1 => 1.25,
+        2 => 0.95,
+        3 => 0.5,
+        _ => 0.85,
+      };
+      final strokeMul = switch (clump.kind) {
+        1 => 0.7,
+        2 => 0.45,
+        3 => 0.55,
+        _ => 0.6,
+      };
+
+      for (var i = 0; i < blades; i++) {
+        final spread =
+            (i / math.max(blades - 1, 1) - 0.5) * spreadMul +
+            (rng.nextDouble() - 0.5) * 0.06;
+        final a = spread + (rng.nextDouble() - 0.5) * 0.08;
+        final len =
+            size.height * (0.016 + rng.nextDouble() * 0.012) * clump.s * lenMul;
+        final base = Offset(cx + spread * size.width * 0.012, cy);
+        final tip = Offset(
+          cx + math.sin(a + lean) * len * (clump.kind == 1 ? 0.35 : 0.5),
+          cy - len * (0.85 + rng.nextDouble() * 0.15),
+        );
+        final mid = Offset(
+          cx + math.sin(a + lean * 0.5) * len * 0.22,
+          cy - len * 0.45,
+        );
+        canvas.drawPath(
+          Path()
+            ..moveTo(base.dx, base.dy)
+            ..quadraticBezierTo(mid.dx, mid.dy, tip.dx, tip.dy),
+          Paint()
+            ..shader = ui.Gradient.linear(
+              base,
+              tip,
+              [
+                ForestPalette.grass.withValues(alpha: 0.5),
+                ForestPalette.grassLit.withValues(
+                  alpha: 0.4 + moonCatch * 0.18,
+                ),
+                ForestPalette.grassMoon.withValues(
+                  alpha: 0.12 + moonCatch * 0.16,
+                ),
+              ],
+              const [0.0, 0.55, 1.0],
+            )
+            ..strokeWidth = (0.55 + rng.nextDouble() * 0.35) * strokeMul
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.round,
+        );
+      }
     }
   }
 
-  void _paintMotes(
-    Canvas canvas,
-    Size size, {
-    required double breath,
-    required Offset pocket,
-  }) {
-    final rng = math.Random(71);
-    for (var i = 0; i < 28; i++) {
-      final baseX = pocket.dx + (rng.nextDouble() - 0.5) * size.width * 0.5;
-      final baseY = pocket.dy + (rng.nextDouble() - 0.25) * size.height * 0.32;
-      final x =
-          (baseX +
-                  t * (0.4 + rng.nextDouble()) * 0.18 +
-                  math.sin(t * 0.28 + i) * 3) %
-              (size.width + 8) -
-          4;
-      final y = baseY + math.sin(t * 0.36 + i * 0.5) * 3.5;
-      final r = 0.45 + rng.nextDouble() * 1.0;
-      final twinkle =
-          0.4 +
-          0.6 *
-              math
-                  .pow(
-                    (0.5 + 0.5 * math.sin(t * (0.5 + rng.nextDouble()) + i))
-                        .clamp(0.0, 1.0),
-                    1.5,
-                  )
-                  .toDouble();
-      canvas.drawCircle(
-        Offset(x, y),
-        r,
-        Paint()
-          ..color = ForestPalette.mote.withValues(
-            alpha: (0.16 + twinkle * 0.4) * (0.8 + breath * 0.2),
-          ),
-      );
+  /// True when a grass clump would sit on a shore boulder.
+  bool _grassHitsRock(double u, double v) {
+    const rocks = <(double u, double v, double ru, double rv)>[
+      (0.08, 0.84, 0.15, 0.10),
+      (0.20, 0.90, 0.09, 0.06),
+      (0.05, 0.94, 0.07, 0.04),
+      (0.91, 0.86, 0.12, 0.08),
+      (0.80, 0.93, 0.08, 0.05),
+    ];
+    for (final r in rocks) {
+      final du = (u - r.$1) / r.$3;
+      final dv = (v - r.$2) / r.$4;
+      if (du * du + dv * dv < 1.0) return true;
     }
+    return false;
   }
 
   void _paintComfortGlow(Canvas canvas, Size size, double breath) {
-    final seat = Offset(size.width * 0.5, size.height * 0.86);
+    final seat = Offset(size.width * 0.5, size.height * 0.9);
     final radius = size.shortestSide * (0.45 + breath * 0.03);
     canvas.drawCircle(
       seat,
       radius,
       Paint()
-        ..shader = ui.Gradient.radial(
-          seat,
-          radius,
-          [
-            ForestPalette.comfort.withValues(alpha: 0.14 + breath * 0.07),
-            ForestPalette.comfort.withValues(alpha: 0.0),
-          ],
-          const [0.0, 1.0],
-        ),
+        ..shader = ui.Gradient.radial(seat, radius, [
+          ForestPalette.comfort.withValues(alpha: 0.12 + breath * 0.05),
+          ForestPalette.comfort.withValues(alpha: 0.0),
+        ]),
     );
   }
 
-  void _paintRoomVignette(Canvas canvas, Size size, double breath) {
+  void _paintVignette(Canvas canvas, Size size, double breath) {
     canvas.drawRect(
       Offset.zero & size,
       Paint()
         ..shader = ui.Gradient.radial(
-          Offset(size.width * 0.5, size.height * 0.48),
-          size.longestSide * 0.7,
+          Offset(size.width * 0.5, size.height * 0.45),
+          size.longestSide * 0.78,
           [
             const Color(0x00000000),
-            ForestPalette.shadeDeep.withValues(alpha: 0.05 + breath * 0.02),
-            ForestPalette.shadeDeep.withValues(alpha: 0.22),
+            ForestPalette.shadeDeep.withValues(alpha: 0.08 + breath * 0.03),
+            ForestPalette.shadeDeep.withValues(alpha: 0.35),
           ],
           const [0.4, 0.78, 1.0],
         ),
     );
   }
 
-  void _paintPresenceInMoss(
+  /// Quiet count floating on the moonlit water —
+  /// noticed when you look, not when you rest.
+  void _paintPresenceOnWater(
     Canvas canvas,
     Size size, {
+    required double waterTop,
+    required double waterBottom,
     required double breath,
+    required double wind,
   }) {
     if (mossCount <= 0) return;
     if (mossReveal < 0.01 && mossErase > 0.99) return;
 
     final label = _formatPresence(mossCount);
-    final opacity = 0.30 + breath * 0.09;
-    final fontSize = size.shortestSide * 0.078;
+    final baseOpacity = 0.22 + breath * 0.05;
+    final fontSize = size.shortestSide * 0.062;
     final hand = math.Random(mossCount * 31 + 7);
-    final anchor = Offset(size.width * 0.72, size.height * 0.90);
+    // Right half of the lake, centered in that half.
+    final anchor = Offset(
+      size.width * 0.75,
+      ui.lerpDouble(waterTop, waterBottom, 0.5)! +
+          math.sin(t * 0.12) * wind * 0.6,
+    );
 
     canvas.save();
     canvas.translate(anchor.dx, anchor.dy);
-    canvas.rotate(0.16);
-    final tip = Matrix4.identity()
-      ..setEntry(3, 1, 0.0016)
-      ..scaleByDouble(1.08, 0.62, 1.0, 1.0);
-    canvas.transform(tip.storage);
+    // Softly angled on the water — part of the surface, not a label.
+    canvas.rotate(-0.14);
+    canvas.skew(-0.16, 0.04);
+    canvas.scale(1.04, 0.6);
 
     final marks =
         <
@@ -877,22 +919,24 @@ class ForestPainter extends CustomPainter {
             double sizeMul,
             double wobbleY,
             double wobbleRot,
+            double phase,
           })
         >[];
     for (var i = 0; i < label.length; i++) {
       marks.add((
         ch: label[i],
-        gap: i == 0 ? 0.0 : fontSize * (0.06 + hand.nextDouble() * 0.10),
-        sizeMul: 0.94 + hand.nextDouble() * 0.12,
-        wobbleY: (hand.nextDouble() - 0.5) * fontSize * 0.12,
-        wobbleRot: (hand.nextDouble() - 0.5) * 0.12,
+        gap: i == 0 ? 0.0 : fontSize * (0.08 + hand.nextDouble() * 0.08),
+        sizeMul: 0.96 + hand.nextDouble() * 0.08,
+        wobbleY: (hand.nextDouble() - 0.5) * fontSize * 0.05,
+        wobbleRot: (hand.nextDouble() - 0.5) * 0.045,
+        phase: hand.nextDouble() * math.pi * 2,
       ));
     }
 
     final n = marks.length;
     var runWidth = 0.0;
     final painters =
-        <({TextPainter shadow, TextPainter fill, TextPainter rim})>[];
+        <({TextPainter glow, TextPainter fill, TextPainter rim})>[];
     for (final m in marks) {
       TextPainter glyph(Color c) => TextPainter(
         text: TextSpan(
@@ -908,11 +952,17 @@ class ForestPainter extends CustomPainter {
         textDirection: TextDirection.ltr,
       )..layout();
 
-      final fill = glyph(ForestPalette.earth.withValues(alpha: opacity * 0.9));
+      final fill = glyph(
+        ForestPalette.waterMoon.withValues(alpha: baseOpacity * 0.85),
+      );
       painters.add((
-        shadow: glyph(ForestPalette.earthDeep.withValues(alpha: opacity)),
+        glow: glyph(
+          ForestPalette.moonGlow.withValues(alpha: baseOpacity * 0.28),
+        ),
         fill: fill,
-        rim: glyph(ForestPalette.canopySun.withValues(alpha: opacity * 0.3)),
+        rim: glyph(
+          ForestPalette.waterLit.withValues(alpha: baseOpacity * 0.35),
+        ),
       ));
       runWidth += m.gap + fill.width;
     }
@@ -933,19 +983,26 @@ class ForestPainter extends CustomPainter {
         continue;
       }
 
-      final smear = gone * (1.0 - gone) * 4.0;
-      final smearX = gone * fontSize * 0.35;
-      final blur = gone * fontSize * 0.08;
+      // Wipe becomes a soft ripple smear across the water.
+      final smear = gone * (1.0 - gone) * 2.2;
+      final smearX = gone * fontSize * 0.3;
+      final blur = gone * fontSize * 0.08 + 0.35;
+
+      // Barely there sway — water, not a bouncing badge.
+      final rippleY = math.sin(t * 0.55 + m.phase + i * 0.7) * fontSize * 0.016;
+      final rippleX = math.sin(t * 0.4 + m.phase) * fontSize * 0.008;
+      final rippleRot = math.sin(t * 0.45 + m.phase) * 0.01;
 
       canvas.save();
       canvas.translate(
-        x + g.fill.width * 0.5 + smearX,
-        m.wobbleY + (1.0 - appear) * fontSize * 0.08,
+        x + g.fill.width * 0.5 + smearX + rippleX,
+        m.wobbleY + rippleY + (1.0 - appear) * fontSize * 0.05,
       );
-      canvas.rotate(m.wobbleRot + gone * 0.06);
-      canvas.scale(1.0 + (1.0 - appear) * 0.04, appear * 0.85 + 0.15);
+      canvas.rotate(m.wobbleRot + gone * 0.03 + rippleRot);
+      canvas.scale(1.0 + (1.0 - appear) * 0.03, appear * 0.92 + 0.08);
 
-      final o = Offset(-g.fill.width * 0.5, -g.fill.height * 0.35);
+      final o = Offset(-g.fill.width * 0.5, -g.fill.height * 0.4);
+
       canvas.saveLayer(
         Rect.fromLTWH(
           o.dx - fontSize,
@@ -955,13 +1012,28 @@ class ForestPainter extends CustomPainter {
         ),
         Paint()
           ..color = Color.fromRGBO(255, 255, 255, life)
-          ..imageFilter = blur > 0.4
-              ? ui.ImageFilter.blur(sigmaX: blur + smear, sigmaY: blur * 0.4)
-              : null,
+          ..imageFilter = ui.ImageFilter.blur(
+            sigmaX: blur + smear * 0.5,
+            sigmaY: blur * 0.7 + smear * 0.3,
+          ),
       );
-      g.shadow.paint(canvas, o.translate(1.0, 1.4));
+
+      if (smear > 0.15) {
+        for (var s = 1; s <= 2; s++) {
+          final trail = (1.0 - s / 3) * gone * 0.28;
+          canvas.saveLayer(
+            null,
+            Paint()..color = Color.fromRGBO(255, 255, 255, trail),
+          );
+          final trailO = o.translate(s * fontSize * 0.1, s * 0.2);
+          g.fill.paint(canvas, trailO);
+          canvas.restore();
+        }
+      }
+
+      g.glow.paint(canvas, o.translate(0, 0.8));
       g.fill.paint(canvas, o);
-      g.rim.paint(canvas, o.translate(-0.5, -0.6));
+      g.rim.paint(canvas, o.translate(-0.25, -0.3));
       canvas.restore();
       canvas.restore();
 
@@ -992,56 +1064,85 @@ class ForestPainter extends CustomPainter {
     if (presenceCount <= 0) return;
     final n = _presenceSparkCount(presenceCount);
     final rng = math.Random(53);
-    final seat = Offset(size.width * 0.5, size.height * 0.72);
-    final rx = size.width * 0.28;
-    final ry = size.height * 0.1;
 
+    // Drift freely in mid-air over the lake — not grounded on the shore.
     for (var i = 0; i < n; i++) {
-      final lane = 0.4 + rng.nextDouble() * 0.6;
-      final slot = (i + 0.5) / n;
-      final homeAngle =
-          slot * math.pi * 2 + math.sin(slot * math.pi * 2) * 0.35;
-      final homeX = seat.dx + math.cos(homeAngle) * rx * lane;
-      final homeY = seat.dy + math.sin(homeAngle) * ry * lane * 0.75;
+      // Drift mid-air and near the shore — fill the lower night too.
+      final homeX = size.width * (0.1 + rng.nextDouble() * 0.8);
+      final homeY = size.height * (0.26 + rng.nextDouble() * 0.55);
 
       final p1 = rng.nextDouble() * math.pi * 2;
       final p2 = rng.nextDouble() * math.pi * 2;
-      final amp = size.shortestSide * (0.01 + rng.nextDouble() * 0.014);
+      final p3 = rng.nextDouble() * math.pi * 2;
+      final ampX = size.width * (0.04 + rng.nextDouble() * 0.06);
+      final ampY = size.height * (0.03 + rng.nextDouble() * 0.05);
+      final sx1 = 0.22 + rng.nextDouble() * 0.35;
+      final sx2 = 0.55 + rng.nextDouble() * 0.5;
+      final sy1 = 0.18 + rng.nextDouble() * 0.3;
+      final sy2 = 0.48 + rng.nextDouble() * 0.45;
+
+      // Occasional soft dart — still free, not orbital.
+      final dartPhase = rng.nextDouble() * math.pi * 2;
+      final dart = math
+          .pow(
+            (0.5 +
+                    0.5 *
+                        math.sin(
+                          t * (0.15 + rng.nextDouble() * 0.2) + dartPhase,
+                        ))
+                .clamp(0.0, 1.0),
+            9,
+          )
+          .toDouble();
+      final dartDir = rng.nextDouble() * math.pi * 2;
+      final dartAmp = size.shortestSide * (0.02 + rng.nextDouble() * 0.03);
+
       final pos = Offset(
         homeX +
-            math.sin(t * (0.28 + rng.nextDouble() * 0.4) + p1) * amp +
-            math.sin(t * (0.7 + rng.nextDouble()) + p2) * amp * 0.45,
-        homeY + math.cos(t * (0.22 + rng.nextDouble() * 0.3) + p2) * amp * 0.55,
+            math.sin(t * sx1 + p1) * ampX +
+            math.sin(t * sx2 + p2) * ampX * 0.45 +
+            math.cos(dartDir) * dartAmp * dart,
+        homeY +
+            math.cos(t * sy1 + p2) * ampY +
+            math.sin(t * sy2 + p3) * ampY * 0.5 +
+            math.sin(dartDir) * dartAmp * dart * 0.7,
       );
 
       final twinkle =
-          0.4 +
-          0.6 *
+          0.35 +
+          0.65 *
               math
                   .pow(
-                    (0.5 + 0.5 * math.sin(t * (0.45 + rng.nextDouble()) + p1))
+                    (0.5 +
+                            0.5 *
+                                math.sin(
+                                  t * (0.65 + rng.nextDouble() * 1.0) + p1,
+                                ))
                         .clamp(0.0, 1.0),
-                    1.5,
+                    1.8,
                   )
                   .toDouble();
-      final r = (1.8 + rng.nextDouble() * 1.6) * (0.85 + twinkle * 0.35);
-      final alpha = (0.55 + twinkle * 0.4) * (0.82 + breath * 0.18);
+      // Fireflies: readable across the room, soft green halo, clear blink.
+      final r = (2.4 + rng.nextDouble() * 2.2) * (0.8 + twinkle * 0.5);
+      final alpha = (0.55 + twinkle * 0.45) * (0.88 + breath * 0.12);
 
       canvas.drawCircle(
         pos,
-        r * 2.4,
+        r * 3.6,
         Paint()
-          ..color = ForestPalette.presence.withValues(alpha: alpha * 0.35)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 1.1),
+          ..color = ForestPalette.presence.withValues(alpha: alpha * 0.38)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 1.8),
       );
       canvas.drawCircle(
         pos,
-        r,
-        Paint()..color = ForestPalette.presenceGlow.withValues(alpha: alpha),
+        r * 1.35,
+        Paint()
+          ..color = ForestPalette.presenceGlow.withValues(alpha: alpha * 0.95)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.55),
       );
       canvas.drawCircle(
         pos,
-        r * 0.38,
+        r * 0.48,
         Paint()..color = ForestPalette.presenceCore.withValues(alpha: alpha),
       );
     }
