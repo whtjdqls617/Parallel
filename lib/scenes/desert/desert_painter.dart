@@ -1083,8 +1083,8 @@ class DesertPainter extends CustomPainter {
     final fontSize = size.shortestSide * 0.078;
     final hand = math.Random(sandCount * 31 + 7);
 
-    // Right lap, close — number only, no sand cover.
-    final anchor = Offset(size.width * 0.74, size.height * 0.88);
+    // Right-middle of the wind-rippled sand — a little higher than the lap.
+    final anchor = Offset(size.width * 0.74, size.height * 0.80);
 
     canvas.save();
     canvas.translate(anchor.dx, anchor.dy);
