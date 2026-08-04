@@ -703,7 +703,8 @@ class DesertPainter extends CustomPainter {
     const stampIn = 0.4;
     const pauseAfter = 2.2;
     const fadeOut = 3.5;
-    final cycle = steps * stepInterval + pauseAfter + fadeOut;
+    const restEmpty = 6.0; // quiet sand before the walk returns
+    final cycle = steps * stepInterval + pauseAfter + fadeOut + restEmpty;
     final u = t % cycle;
 
     final near = Offset(size.width * 0.44, size.height * 0.92);
@@ -714,6 +715,7 @@ class DesertPainter extends CustomPainter {
     final globalFade = u > fadeStart
         ? (1.0 - ((u - fadeStart) / fadeOut).clamp(0.0, 1.0))
         : 1.0;
+    // Empty rest after fade — nothing to draw until the cycle restarts.
     if (globalFade < 0.02) return;
 
     for (var i = 0; i < steps; i++) {
@@ -739,13 +741,18 @@ class DesertPainter extends CustomPainter {
       final nextT = ((i + 1) / (steps - 1)).clamp(0.0, 1.0);
       final next = Offset.lerp(near, far, math.pow(nextT, 1.15).toDouble())!;
       final dir = next - along;
-      final angle = math.atan2(dir.dy, dir.dx) + math.pi / 2;
+      final isLast = i == steps - 1;
+      // Last print: face straight ahead (end of lerp has no forward delta).
+      final trailDir = far - near;
+      final angle = isLast
+          ? math.atan2(trailDir.dy, trailDir.dx) + math.pi / 2
+          : math.atan2(dir.dy, dir.dx) + math.pi / 2;
 
       final scale = ui.lerpDouble(1.15, 0.28, eased)!;
       // Fresh print is darker, then settles.
       final freshness = age < 2.0 ? (1.0 - age / 2.0) * 0.35 : 0.0;
       final opacity =
-          ui.lerpDouble(0.58, 0.18, eased)! * life * (1.0 + freshness);
+          ui.lerpDouble(0.50, 0.16, eased)! * life * (1.0 + freshness);
       final isLeft = i.isEven;
       final side = isLeft ? -1.0 : 1.0;
       final stride = size.shortestSide * 0.022 * scale;
@@ -761,7 +768,7 @@ class DesertPainter extends CustomPainter {
       _paintOnePrint(
         canvas,
         center: footCenter.translate(0, settle),
-        angle: angle + side * 0.08,
+        angle: isLast ? angle : angle + side * 0.08,
         scale: scale * size.shortestSide * (0.95 + stamp * 0.08),
         opacity: opacity,
       );
@@ -779,52 +786,56 @@ class DesertPainter extends CustomPainter {
   }) {
     final length = scale * 0.072;
     final width = scale * 0.032;
-    final ink = DesertPalette.duneDeepShadow;
-    final rim = const Color(0xFFFFE4C0);
+    // Pressed grit — same warm sand, a shade deeper where the foot sank.
+    final pit = Color.lerp(
+      DesertPalette.duneNear,
+      DesertPalette.duneShadow,
+      0.55,
+    )!;
+    final rim = DesertPalette.duneLit;
 
     canvas.save();
     canvas.translate(center.dx, center.dy);
     canvas.rotate(angle);
 
-    // Soft bed under the print — barely blurred so the shape stays readable.
+    // Soft bed — barely diffused into surrounding grit.
     canvas.drawPath(
       _footSolePath(length, width),
       Paint()
-        ..color = ink.withValues(alpha: opacity * 0.55)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, scale * 0.0022),
+        ..color = pit.withValues(alpha: opacity * 0.4)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, scale * 0.002),
     );
 
-    // Crisp sole depression.
+    // Main depression — sand color, not ink.
     canvas.drawPath(
       _footSolePath(length, width),
-      Paint()..color = ink.withValues(alpha: opacity * 0.95),
+      Paint()..color = pit.withValues(alpha: opacity * 0.85),
     );
 
-    // Heel — deeper, rounded press (not a point).
+    // Heel / ball fill — same pressed sand tone as the sole.
     canvas.drawOval(
       Rect.fromCenter(
         center: Offset(0, length * 0.26),
         width: width * 0.95,
         height: length * 0.36,
       ),
-      Paint()..color = ink.withValues(alpha: (opacity * 1.15).clamp(0.0, 1.0)),
+      Paint()..color = pit.withValues(alpha: opacity * 0.55),
     );
 
-    // Ball / rounded front — wide oval so the tip never reads as a point.
     canvas.drawOval(
       Rect.fromCenter(
         center: Offset(0, -length * 0.18),
         width: width * 1.12,
         height: length * 0.52,
       ),
-      Paint()..color = ink.withValues(alpha: opacity * 0.9),
+      Paint()..color = pit.withValues(alpha: opacity * 0.55),
     );
 
-    // Raised grit rim — thin, sharp, not a fog.
+    // Raised grit at the rim — lit sand pushed aside.
     canvas.drawPath(
       _footSolePath(length * 1.04, width * 1.08),
       Paint()
-        ..color = rim.withValues(alpha: opacity * 0.4)
+        ..color = rim.withValues(alpha: opacity * 0.32)
         ..style = PaintingStyle.stroke
         ..strokeWidth = scale * 0.0028,
     );
@@ -863,7 +874,12 @@ class DesertPainter extends CustomPainter {
       -width * 0.44,
       0,
     );
-    path.quadraticBezierTo(-width * 0.46, length * 0.18, -width * 0.28, length * 0.38);
+    path.quadraticBezierTo(
+      -width * 0.46,
+      length * 0.18,
+      -width * 0.28,
+      length * 0.38,
+    );
     path.close();
     return path;
   }
