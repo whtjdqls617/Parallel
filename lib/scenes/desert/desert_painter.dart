@@ -9,7 +9,13 @@ import '../../theme/desert_palette.dart';
 /// Comfort is the light that breathes around you; the number outside
 /// this painter is the quiet proof that others rest in the same moment.
 class DesertPainter extends CustomPainter {
-  DesertPainter({required this.t, this.presenceCount = 0});
+  DesertPainter({
+    required this.t,
+    this.presenceCount = 0,
+    this.sandCount = 0,
+    this.sandReveal = 1,
+    this.sandErase = 0,
+  });
 
   /// Continuous elapsed time in seconds.
   final double t;
@@ -17,8 +23,22 @@ class DesertPainter extends CustomPainter {
   /// People resting in this same moment — soft sparks around your seat.
   final int presenceCount;
 
+  /// Number currently being inscribed in the sand (may lag during wipe/rewrite).
+  final int sandCount;
+
+  /// 0 → 1 how far the inscription has been written (left to right).
+  final double sandReveal;
+
+  /// 0 → 1 how far a finger has wiped the old mark away.
+  final double sandErase;
+
   /// Shared lullaby period — scene and count breathe together.
   static const breathPeriod = 5.5;
+
+  /// Hand wipe then rewrite when the count changes.
+  static const sandEraseSeconds = 1.15;
+  static const sandPauseSeconds = 0.28;
+  static const sandWriteSeconds = 1.35;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -725,7 +745,7 @@ class DesertPainter extends CustomPainter {
       // Fresh print is darker, then settles.
       final freshness = age < 2.0 ? (1.0 - age / 2.0) * 0.35 : 0.0;
       final opacity =
-          ui.lerpDouble(0.48, 0.14, eased)! * life * (1.0 + freshness);
+          ui.lerpDouble(0.58, 0.18, eased)! * life * (1.0 + freshness);
       final isLeft = i.isEven;
       final side = isLeft ? -1.0 : 1.0;
       final stride = size.shortestSide * 0.022 * scale;
@@ -757,49 +777,95 @@ class DesertPainter extends CustomPainter {
     required double scale,
     required double opacity,
   }) {
-    final length = scale * 0.065;
-    final width = scale * 0.030;
+    final length = scale * 0.072;
+    final width = scale * 0.032;
+    final ink = DesertPalette.duneDeepShadow;
+    final rim = const Color(0xFFFFE4C0);
 
     canvas.save();
     canvas.translate(center.dx, center.dy);
     canvas.rotate(angle);
 
-    // Soft depression in warm sand.
-    final sole = Rect.fromCenter(
-      center: Offset.zero,
-      width: width,
-      height: length,
-    );
-    canvas.drawOval(
-      sole,
+    // Soft bed under the print — barely blurred so the shape stays readable.
+    canvas.drawPath(
+      _footSolePath(length, width),
       Paint()
-        ..color = DesertPalette.duneDeepShadow.withValues(alpha: opacity)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, scale * 0.004),
+        ..color = ink.withValues(alpha: opacity * 0.55)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, scale * 0.0022),
     );
 
-    // Slightly darker heel.
+    // Crisp sole depression.
+    canvas.drawPath(
+      _footSolePath(length, width),
+      Paint()..color = ink.withValues(alpha: opacity * 0.95),
+    );
+
+    // Heel — deeper, rounded press (not a point).
     canvas.drawOval(
       Rect.fromCenter(
-        center: Offset(0, length * 0.22),
-        width: width * 0.85,
-        height: length * 0.35,
+        center: Offset(0, length * 0.26),
+        width: width * 0.95,
+        height: length * 0.36,
       ),
-      Paint()
-        ..color = DesertPalette.duneDeepShadow.withValues(alpha: opacity * 1.25)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, scale * 0.003),
+      Paint()..color = ink.withValues(alpha: (opacity * 1.15).clamp(0.0, 1.0)),
     );
 
-    // Soft rim catch-light — sand pushed up at the edge.
+    // Ball / rounded front — wide oval so the tip never reads as a point.
     canvas.drawOval(
-      sole.inflate(scale * 0.005),
+      Rect.fromCenter(
+        center: Offset(0, -length * 0.18),
+        width: width * 1.12,
+        height: length * 0.52,
+      ),
+      Paint()..color = ink.withValues(alpha: opacity * 0.9),
+    );
+
+    // Raised grit rim — thin, sharp, not a fog.
+    canvas.drawPath(
+      _footSolePath(length * 1.04, width * 1.08),
       Paint()
-        ..color = Color.fromRGBO(255, 232, 200, opacity * 0.55)
+        ..color = rim.withValues(alpha: opacity * 0.4)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = scale * 0.004
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, scale * 0.003),
+        ..strokeWidth = scale * 0.0028,
     );
 
     canvas.restore();
+  }
+
+  Path _footSolePath(double length, double width) {
+    // Soft shoe-like sole: blunt rounded heel and front — no points.
+    final path = Path();
+    // Wide heel arc (bottom).
+    path.moveTo(-width * 0.28, length * 0.38);
+    path.cubicTo(
+      -width * 0.18,
+      length * 0.48,
+      width * 0.18,
+      length * 0.48,
+      width * 0.28,
+      length * 0.38,
+    );
+    path.quadraticBezierTo(width * 0.46, length * 0.18, width * 0.44, 0);
+    // Broad front arc.
+    path.cubicTo(
+      width * 0.48,
+      -length * 0.32,
+      width * 0.28,
+      -length * 0.44,
+      0,
+      -length * 0.44,
+    );
+    path.cubicTo(
+      -width * 0.28,
+      -length * 0.44,
+      -width * 0.48,
+      -length * 0.32,
+      -width * 0.44,
+      0,
+    );
+    path.quadraticBezierTo(-width * 0.46, length * 0.18, -width * 0.28, length * 0.38);
+    path.close();
+    return path;
   }
 
   void _paintDust(
@@ -981,18 +1047,20 @@ class DesertPainter extends CustomPainter {
   }
 
   /// Quiet count pressed into the sand at your right —
-  /// where a right hand would idly mark, facing you.
+  /// wiped away by hand, then rewritten when the count changes.
   void _paintPresenceInSand(
     Canvas canvas,
     Size size, {
     required double breath,
   }) {
-    if (presenceCount <= 0) return;
+    if (sandCount <= 0) return;
+    // Blank beat between wipe and rewrite.
+    if (sandReveal < 0.01 && sandErase > 0.99) return;
 
-    final label = _formatPresence(presenceCount);
-    final opacity = 0.30 + breath * 0.09;
+    final label = _formatPresence(sandCount);
+    final baseOpacity = 0.30 + breath * 0.09;
     final fontSize = size.shortestSide * 0.078;
-    final hand = math.Random(presenceCount * 31 + 7);
+    final hand = math.Random(sandCount * 31 + 7);
 
     // Right lap, close — number only, no sand cover.
     final anchor = Offset(size.width * 0.74, size.height * 0.88);
@@ -1027,6 +1095,7 @@ class DesertPainter extends CustomPainter {
       ));
     }
 
+    final n = marks.length;
     var runWidth = 0.0;
     final painters =
         <({TextPainter shadow, TextPainter fill, TextPainter rim})>[];
@@ -1046,12 +1115,14 @@ class DesertPainter extends CustomPainter {
       )..layout();
 
       final fill = glyph(
-        DesertPalette.duneShadow.withValues(alpha: opacity * 0.9),
+        DesertPalette.duneShadow.withValues(alpha: baseOpacity * 0.9),
       );
       painters.add((
-        shadow: glyph(DesertPalette.duneDeepShadow.withValues(alpha: opacity)),
+        shadow: glyph(
+          DesertPalette.duneDeepShadow.withValues(alpha: baseOpacity),
+        ),
         fill: fill,
-        rim: glyph(DesertPalette.duneLit.withValues(alpha: opacity * 0.36)),
+        rim: glyph(DesertPalette.duneLit.withValues(alpha: baseOpacity * 0.36)),
       ));
       runWidth += m.gap + fill.width;
     }
@@ -1062,13 +1133,65 @@ class DesertPainter extends CustomPainter {
       final g = painters[i];
       x += m.gap;
 
+      // Write left → right; wipe right → left (as a right hand would).
+      final writeLocal = (sandReveal * (n + 0.35) - i).clamp(0.0, 1.0);
+      final eraseLocal = (sandErase * (n + 0.35) - (n - 1 - i)).clamp(0.0, 1.0);
+      final appear = _smooth01(writeLocal);
+      final gone = _smooth01(eraseLocal);
+      final life = (appear * (1.0 - gone)).clamp(0.0, 1.0);
+      if (life < 0.02) {
+        x += g.fill.width;
+        continue;
+      }
+
+      // While wiping: smear sideways like a finger dragging grit.
+      final smear = gone * (1.0 - gone) * 4.0;
+      final smearX = gone * fontSize * 0.35;
+      final blur = gone * fontSize * 0.08;
+
       canvas.save();
-      canvas.translate(x + g.fill.width * 0.5, m.wobbleY);
-      canvas.rotate(m.wobbleRot);
+      canvas.translate(
+        x + g.fill.width * 0.5 + smearX,
+        m.wobbleY + (1.0 - appear) * fontSize * 0.08,
+      );
+      canvas.rotate(m.wobbleRot + gone * 0.06);
+      canvas.scale(1.0 + (1.0 - appear) * 0.04, appear * 0.85 + 0.15);
+
       final o = Offset(-g.fill.width * 0.5, -g.fill.height * 0.35);
+
+      canvas.saveLayer(
+        Rect.fromLTWH(
+          o.dx - fontSize,
+          o.dy - fontSize,
+          g.fill.width + fontSize * 2,
+          g.fill.height + fontSize * 2,
+        ),
+        Paint()
+          ..color = Color.fromRGBO(255, 255, 255, life)
+          ..imageFilter = blur > 0.4
+              ? ui.ImageFilter.blur(sigmaX: blur + smear, sigmaY: blur * 0.4)
+              : null,
+      );
+
+      if (smear > 0.15) {
+        // Ghost trails of the wipe.
+        for (var s = 1; s <= 3; s++) {
+          final trail = (1.0 - s / 4) * gone * 0.45;
+          canvas.saveLayer(
+            null,
+            Paint()..color = Color.fromRGBO(255, 255, 255, trail),
+          );
+          final trailO = o.translate(s * fontSize * 0.12, s * 0.4);
+          g.shadow.paint(canvas, trailO.translate(1.0, 1.4));
+          g.fill.paint(canvas, trailO);
+          canvas.restore();
+        }
+      }
+
       g.shadow.paint(canvas, o.translate(1.0, 1.4));
       g.fill.paint(canvas, o);
       g.rim.paint(canvas, o.translate(-0.5, -0.6));
+      canvas.restore(); // saveLayer
       canvas.restore();
 
       x += g.fill.width;
@@ -1089,6 +1212,9 @@ class DesertPainter extends CustomPainter {
   }
 
   /// Soft constellation sparks — company wrapping your seat.
+  /// Count rises gently with people, then hard-caps so it never swarms.
+  static const presenceSparkMax = 10;
+
   void _paintPresenceSpirits(
     Canvas canvas,
     Size size, {
@@ -1096,13 +1222,7 @@ class DesertPainter extends CustomPainter {
   }) {
     if (presenceCount <= 0) return;
 
-    final n = presenceCount <= 3
-        ? presenceCount
-        : presenceCount < 20
-        ? 3 + ((presenceCount - 3) / 4).round().clamp(0, 6)
-        : presenceCount < 100
-        ? 9 + ((presenceCount - 20) / 16).round().clamp(0, 5)
-        : 14;
+    final n = _presenceSparkCount(presenceCount);
     final rng = math.Random(53);
 
     // Home ring around the seat — periphery, not the horizon.
@@ -1169,10 +1289,10 @@ class DesertPainter extends CustomPainter {
         homeY + wanderY + math.sin(dartDir) * dartAmp * dart * 0.7,
       );
 
-      // Twinkle — irregular brightness, not a shared pulse.
+      // Twinkle — clearer peaks, not a soft mush.
       final twinkle =
-          0.35 +
-          0.65 *
+          0.4 +
+          0.6 *
               math
                   .pow(
                     (0.5 +
@@ -1181,21 +1301,34 @@ class DesertPainter extends CustomPainter {
                                   t * (0.55 + rng.nextDouble() * 1.4) + p1,
                                 ))
                         .clamp(0.0, 1.0),
-                    1.6 + rng.nextDouble(),
+                    1.35 + rng.nextDouble() * 0.5,
                   )
                   .toDouble();
 
-      final nearness = (1.1 - lane).clamp(0.4, 1.0);
-      final rimFade = (0.45 + ahead.clamp(0.0, 1.0) * 0.55).clamp(0.5, 1.0);
+      final nearness = (1.1 - lane).clamp(0.45, 1.0);
+      final rimFade = (0.55 + ahead.clamp(0.0, 1.0) * 0.45).clamp(0.55, 1.0);
       final r =
-          (2.2 + rng.nextDouble() * 2.8) *
-          (0.9 + nearness * 0.4) *
-          (0.8 + twinkle * 0.4);
+          (2.8 + rng.nextDouble() * 2.6) *
+          (0.95 + nearness * 0.35) *
+          (0.85 + twinkle * 0.4);
       final alpha =
-          (0.48 + twinkle * 0.5) * (0.78 + breath * 0.22) * nearness * rimFade;
+          (0.62 + twinkle * 0.38) * (0.82 + breath * 0.18) * nearness * rimFade;
 
       _paintPresenceSpark(canvas, center: pos, radius: r, alpha: alpha);
     }
+  }
+
+  int _presenceSparkCount(int people) {
+    if (people <= 0) return 0;
+    if (people <= 3) return people;
+    if (people < 20) {
+      return (3 + ((people - 3) / 4).round()).clamp(3, 7);
+    }
+    if (people < 60) {
+      return (7 + ((people - 20) / 20).round()).clamp(7, presenceSparkMax);
+    }
+    // Many people → same soft company. Never past the ceiling.
+    return presenceSparkMax;
   }
 
   void _paintPresenceSpark(
@@ -1204,28 +1337,46 @@ class DesertPainter extends CustomPainter {
     required double radius,
     required double alpha,
   }) {
+    // Soft halo.
     canvas.drawCircle(
       center,
-      radius * 3.0,
+      radius * 2.6,
       Paint()
-        ..color = DesertPalette.comfort.withValues(alpha: alpha * 0.48)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 1.6),
+        ..color = DesertPalette.comfort.withValues(alpha: alpha * 0.42)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 1.2),
     );
+
+    // Clear body.
     canvas.drawCircle(
       center,
       radius,
-      Paint()..color = const Color(0xFFFFF2DC).withValues(alpha: alpha),
+      Paint()..color = const Color(0xFFFFF4E0).withValues(alpha: alpha),
     );
+
+    // Bright core — reads from across the room.
     canvas.drawCircle(
       center,
-      radius * 0.4,
-      Paint()..color = const Color(0xFFFFFCF8).withValues(alpha: alpha),
+      radius * 0.42,
+      Paint()..color = const Color(0xFFFFFFF8).withValues(alpha: alpha),
     );
+
+    // Tiny cross glint — sparkle, not just a blob.
+    final glint = Paint()
+      ..color = const Color(0xFFFFFFF8).withValues(alpha: alpha * 0.85)
+      ..strokeWidth = math.max(1.0, radius * 0.18)
+      ..strokeCap = StrokeCap.round;
+    final arm = radius * 1.35;
+    canvas.drawLine(center.translate(-arm, 0), center.translate(arm, 0), glint);
+    canvas.drawLine(center.translate(0, -arm), center.translate(0, arm), glint);
   }
 
   @override
   bool shouldRepaint(covariant DesertPainter oldDelegate) =>
-      oldDelegate.t != t || oldDelegate.presenceCount != presenceCount;
+      oldDelegate.t != t ||
+      oldDelegate.presenceCount != presenceCount ||
+      oldDelegate.sandCount != sandCount ||
+      oldDelegate.sandReveal != sandReveal ||
+      oldDelegate.sandErase != sandErase;
 }
 
 enum DuneStyle { ridge, mid, near }

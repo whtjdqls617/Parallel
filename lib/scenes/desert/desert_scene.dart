@@ -7,10 +7,7 @@ import 'desert_painter.dart';
 
 /// Full-bleed desert. Empty place. Shared only by the quiet count.
 class DesertScene extends StatefulWidget {
-  const DesertScene({
-    super.key,
-    this.presenceCount = 127,
-  });
+  const DesertScene({super.key, this.presenceCount = 127});
 
   /// People currently resting in this same moment, worldwide.
   final int presenceCount;
@@ -24,10 +21,28 @@ class _DesertSceneState extends State<DesertScene>
   late final Ticker _ticker;
   Duration _elapsed = Duration.zero;
 
+  /// Settled inscription on the sand.
+  late int _sandSettled;
+
+  /// Count being wiped / rewritten during a transition.
+  int? _sandFrom;
+  int? _sandTo;
+  double? _sandChangeAt;
+
+  /// Live presence — follows [widget.presenceCount], with a soft demo drift
+  /// so the wipe/rewrite can be felt before a real feed is wired.
+  late int _liveCount;
+  double _nextDemoAt = 9;
+
   @override
   void initState() {
     super.initState();
+    _liveCount = widget.presenceCount;
+    _sandSettled = widget.presenceCount;
     _ticker = createTicker((elapsed) {
+      final t = elapsed.inMicroseconds / 1e6;
+      _maybeDemoDrift(t);
+      _maybeSettleSand(t);
       setState(() => _elapsed = elapsed);
     })..start();
 
@@ -42,20 +57,116 @@ class _DesertSceneState extends State<DesertScene>
   }
 
   @override
+  void didUpdateWidget(covariant DesertScene oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.presenceCount == widget.presenceCount) return;
+    _liveCount = widget.presenceCount;
+    _beginSandChange(widget.presenceCount);
+  }
+
+  @override
   void dispose() {
     _ticker.dispose();
     super.dispose();
   }
 
+  void _beginSandChange(int next) {
+    final t = _elapsed.inMicroseconds / 1e6;
+    final showing = _currentSandCount(t);
+    if (next == showing && _sandChangeAt == null) return;
+    _sandFrom = showing;
+    _sandTo = next;
+    _sandChangeAt = t;
+  }
+
+  void _maybeDemoDrift(double t) {
+    // Temporary: gentle count drift so the hand rewrite is visible in demos.
+    // Remove when a live presence feed drives [presenceCount].
+    if (t < _nextDemoAt) return;
+    if (_sandChangeAt != null) {
+      _nextDemoAt = t + 2;
+      return;
+    }
+    final delta = (t * 17).floor().isEven ? 1 : -1;
+    final next = (_liveCount + delta).clamp(3, 999);
+    if (next == _liveCount) return;
+    _liveCount = next;
+    _beginSandChange(next);
+    _nextDemoAt = t + 8 + (next % 5);
+  }
+
+  void _maybeSettleSand(double t) {
+    final changeAt = _sandChangeAt;
+    final to = _sandTo;
+    if (changeAt == null || to == null) return;
+
+    final total =
+        DesertPainter.sandEraseSeconds +
+        DesertPainter.sandPauseSeconds +
+        DesertPainter.sandWriteSeconds;
+    if (t - changeAt < total) return;
+
+    _sandSettled = to;
+    _sandFrom = null;
+    _sandTo = null;
+    _sandChangeAt = null;
+  }
+
+  int _currentSandCount(double t) {
+    final changeAt = _sandChangeAt;
+    final from = _sandFrom;
+    final to = _sandTo;
+    if (changeAt == null || from == null || to == null) return _sandSettled;
+
+    final u = t - changeAt;
+    if (u < DesertPainter.sandEraseSeconds) return from;
+    return to;
+  }
+
+  ({int sandCount, double reveal, double erase}) _sandInscription(double t) {
+    final changeAt = _sandChangeAt;
+    final from = _sandFrom;
+    final to = _sandTo;
+    if (changeAt == null || from == null || to == null) {
+      return (sandCount: _sandSettled, reveal: 1, erase: 0);
+    }
+
+    final u = t - changeAt;
+    const eraseDur = DesertPainter.sandEraseSeconds;
+    const pauseDur = DesertPainter.sandPauseSeconds;
+    const writeDur = DesertPainter.sandWriteSeconds;
+
+    if (u < eraseDur) {
+      return (
+        sandCount: from,
+        reveal: 1,
+        erase: (u / eraseDur).clamp(0.0, 1.0),
+      );
+    }
+    if (u < eraseDur + pauseDur) {
+      return (sandCount: to, reveal: 0, erase: 1);
+    }
+    if (u < eraseDur + pauseDur + writeDur) {
+      final w = ((u - eraseDur - pauseDur) / writeDur).clamp(0.0, 1.0);
+      return (sandCount: to, reveal: w, erase: 0);
+    }
+    return (sandCount: to, reveal: 1, erase: 0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = _elapsed.inMicroseconds / 1e6;
+    final sand = _sandInscription(t);
+
     return ColoredBox(
       color: DesertPalette.canvas,
       child: CustomPaint(
         painter: DesertPainter(
           t: t,
-          presenceCount: widget.presenceCount,
+          presenceCount: _liveCount,
+          sandCount: sand.sandCount,
+          sandReveal: sand.reveal,
+          sandErase: sand.erase,
         ),
         size: Size.infinite,
       ),
