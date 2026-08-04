@@ -127,7 +127,7 @@ class DesertPainter extends CustomPainter {
     _paintPresenceInSand(canvas, size, breath: breath);
     _paintDust(canvas, size, wind, vanish: vanish);
 
-    // Close companions — soft sparks wrapping your seat.
+    // Companions — soft sparks across the hollow, center and sides.
     _paintPresenceSpirits(canvas, size, breath: breath);
 
     _paintComfortGlow(canvas, size, breath);
@@ -414,28 +414,31 @@ class DesertPainter extends CustomPainter {
     final rng = math.Random(seed);
     final points = <Offset>[];
     if (style == DuneStyle.ridge) {
-      final a = 0.50 + rng.nextDouble() * 0.15;
-      final b = 0.78 + rng.nextDouble() * 0.15;
-      final c = 0.45 + rng.nextDouble() * 0.12;
-      final d = 0.68 + rng.nextDouble() * 0.14;
+      // Continuous far sweep — one crest from edge to edge, mild undulation.
+      final a = 0.58 + rng.nextDouble() * 0.08;
+      final b = 0.82 + rng.nextDouble() * 0.10;
+      final c = 0.62 + rng.nextDouble() * 0.08;
+      final d = 0.76 + rng.nextDouble() * 0.10;
+      final e = 0.56 + rng.nextDouble() * 0.08;
       points.addAll([
         Offset(0.00, a),
-        Offset(0.22, b),
-        Offset(0.48, c),
-        Offset(0.72, d),
-        Offset(1.00, 0.52 + rng.nextDouble() * 0.12),
+        Offset(0.20, b),
+        Offset(0.42, c),
+        Offset(0.62, d),
+        Offset(0.82, c + 0.06),
+        Offset(1.00, e),
       ]);
     } else if (style == DuneStyle.mid) {
-      // Soft open pass — low shoulders, open center. Easy on the eyes.
-      // Looks toward the far ridges instead of blocking them.
+      // Soft mid pass — gentle center dip, but crest stays flush L→R.
+      // Gaze can still slip through without the ridge looking detached.
       points.addAll([
-        Offset(0.00, 0.42),
-        Offset(0.16, 0.52),
-        Offset(0.32, 0.38),
-        Offset(0.50, 0.28), // open middle — gaze slips through
-        Offset(0.68, 0.40),
-        Offset(0.84, 0.55),
-        Offset(1.00, 0.44),
+        Offset(0.00, 0.50),
+        Offset(0.14, 0.58),
+        Offset(0.32, 0.46),
+        Offset(0.50, 0.40),
+        Offset(0.68, 0.48),
+        Offset(0.86, 0.60),
+        Offset(1.00, 0.52),
       ]);
     } else {
       points.addAll([
@@ -449,6 +452,8 @@ class DesertPainter extends CustomPainter {
 
     final windLift = wind * rise * 0.006;
     final swayX = sway * size.width * 0.2;
+    // Extra overdraw so perspective scale + sway still reach both edges.
+    final overdraw = size.width * 0.14 + swayX.abs();
 
     double crestAt(double u) {
       for (var i = 0; i < points.length - 1; i++) {
@@ -463,12 +468,12 @@ class DesertPainter extends CustomPainter {
       return points.last.dy;
     }
 
-    final path = Path()..moveTo(-20, size.height);
+    final path = Path()..moveTo(-overdraw, size.height);
     const samples = 64;
     final crestSamples = <Offset>[];
     for (var i = 0; i <= samples; i++) {
       final u = i / samples;
-      final x = -20 + (size.width + 40) * u + swayX;
+      final x = -overdraw + (size.width + overdraw * 2) * u + swayX;
       final h = crestAt(u);
       final y = crestY + rise * (1 - h) - windLift * math.sin(u * math.pi);
       crestSamples.add(Offset(x, y));
@@ -479,7 +484,7 @@ class DesertPainter extends CustomPainter {
       }
     }
     path
-      ..lineTo(size.width + 20, size.height)
+      ..lineTo(size.width + overdraw, size.height)
       ..close();
 
     final washed = Color.lerp(color, DesertPalette.skyHorizon, depthFade)!;
@@ -1227,7 +1232,7 @@ class DesertPainter extends CustomPainter {
     return '${(n / 1000).round()}k';
   }
 
-  /// Soft constellation sparks — company wrapping your seat.
+  /// Soft constellation sparks — company drifting across the hollow.
   /// Count rises gently with people, then hard-caps so it never swarms.
   static const presenceSparkMax = 10;
 
@@ -1241,29 +1246,17 @@ class DesertPainter extends CustomPainter {
     final n = _presenceSparkCount(presenceCount);
     final rng = math.Random(53);
 
-    // Home ring around the seat — periphery, not the horizon.
+    // Even homes across the hollow — keep the soft desert spark look.
     final seat = Offset(size.width * 0.5, size.height * 0.58);
-    final rx = size.width * 0.46;
-    final ry = size.height * 0.28;
 
     for (var i = 0; i < n; i++) {
-      final lane = 0.55 + rng.nextDouble() * 0.45;
-      final slot = (i + 0.5) / n;
-      final sideBias = math.sin(slot * math.pi * 2) * 0.35;
-      final homeAngle = slot * math.pi * 2 + sideBias + rng.nextDouble() * 0.5;
+      // Stratify across width so left / middle / right stay evenly company.
+      final col = (i + 0.5) / n;
+      final homeX =
+          size.width * (0.08 + col * 0.84 + (rng.nextDouble() - 0.5) * 0.08);
+      final homeY = size.height * (0.28 + rng.nextDouble() * 0.52);
 
-      var homeX = seat.dx + math.cos(homeAngle) * rx * lane;
-      var homeY = seat.dy + math.sin(homeAngle) * ry * lane * 0.85;
-
-      // Keep a soft clear cone ahead.
-      final ahead = (homeX - seat.dx).abs() / (size.width * 0.5);
-      final lift = (seat.dy - homeY) / (size.height * 0.35);
-      if (ahead < 0.22 && lift > 0.15 && lift < 0.85) {
-        final dir = homeX >= seat.dx ? 1.0 : -1.0;
-        homeX += dir * (0.22 - ahead) * size.width * 0.55;
-      }
-
-      // Irregular wander — layered drifts + rare darts, not a smooth orbit.
+      // Irregular wander — layered drifts + rare darts (original desert feel).
       final p1 = rng.nextDouble() * math.pi * 2;
       final p2 = rng.nextDouble() * math.pi * 2;
       final p3 = rng.nextDouble() * math.pi * 2;
@@ -1284,7 +1277,6 @@ class DesertPainter extends CustomPainter {
           math.sin(t * sy2 + p3) * amp * 0.45 +
           math.cos(t * sy3 + p1) * amp * 0.22;
 
-      // Occasional dart — sharp envelope, different phase per spark.
       final dartPhase = rng.nextDouble() * math.pi * 2;
       final dart = math
           .pow(
@@ -1321,6 +1313,10 @@ class DesertPainter extends CustomPainter {
                   )
                   .toDouble();
 
+      // Soft falloff like before — don't let free scatter make them too dense.
+      final ahead = (pos.dx - seat.dx).abs() / (size.width * 0.5);
+      final lane =
+          ((pos - seat).distance / (size.shortestSide * 0.42)).clamp(0.35, 1.0);
       final nearness = (1.1 - lane).clamp(0.45, 1.0);
       final rimFade = (0.55 + ahead.clamp(0.0, 1.0) * 0.45).clamp(0.55, 1.0);
       final r =
