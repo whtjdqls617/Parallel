@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "864286289631",
+    "project_id": "parallel-e7b98",
+    "storage_bucket": "parallel-e7b98.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:864286289631:android:300b2678b654cb3a3dc36a",
+        "android_client_info": {
+          "package_name": "com.parallel.android"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDw861rr5diYS5Axx8dcIk6qSHwHfhEnhI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,4 +1,4 @@
-package com.example.parallel
+package com.parallel.android
 
 import io.flutter.embedding.android.FlutterActivity
 

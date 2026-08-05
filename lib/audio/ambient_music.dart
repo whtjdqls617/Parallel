@@ -2,13 +2,17 @@ import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
 
+import 'theme_music_catalog.dart';
+
 enum AmbienceScene { desert, forest }
 
 /// Nature bed (on by default) + optional song, mixed together.
 ///
-/// Nature beds use a short fade-out / fade-in cycle so loop seams stay soft.
+/// Nature beds stay local. Theme songs stream from Firebase Storage when
+/// available, with a local asset fallback for development.
 class AmbientMusic {
-  AmbientMusic();
+  AmbientMusic({ThemeMusicCatalog? catalog})
+    : _catalog = catalog ?? ThemeMusicCatalog();
 
   static const songPath = 'audio/maeumeul_deuryeoyo_mr.mp3';
   static const desertNaturePath = 'audio/nature_desert.wav';
@@ -25,6 +29,8 @@ class AmbientMusic {
   static const _fadeIn = Duration(milliseconds: 350);
 
   static bool _audioContextReady = false;
+
+  final ThemeMusicCatalog _catalog;
 
   AudioPlayer? _nature;
   AudioPlayer? _song;
@@ -75,6 +81,9 @@ class AmbientMusic {
   Future<void> setScene(AmbienceScene scene) async {
     if (_disposed) return;
 
+    final sceneChanged = _natureScene != scene;
+    final songWasPlaying = isSongPlaying;
+
     if (_natureScene == scene && _nature != null) {
       if (_nature!.state != PlayerState.playing) {
         await _nature!.setVolume(0);
@@ -106,6 +115,11 @@ class AmbientMusic {
     await _fade(player, from: 0, to: _natureVolume, ms: _fadeIn.inMilliseconds);
     if (_disposed || epoch != _natureEpoch) return;
     _scheduleCycle();
+
+    if (sceneChanged && songWasPlaying) {
+      _songStarted = false;
+      await playSong();
+    }
   }
 
   void _scheduleCycle() {
@@ -178,17 +192,35 @@ class AmbientMusic {
 
   Future<void> playSong() async {
     if (_disposed) return;
+    final scene = _natureScene;
     final player = _song ??= await _createPlayer();
     await player.setReleaseMode(ReleaseMode.loop);
     await player.setVolume(songVolume);
 
-    if (_songStarted) {
+    if (_songStarted && player.state != PlayerState.stopped) {
       await player.resume();
-    } else {
-      await player.play(AssetSource(songPath));
-      _songStarted = true;
+      await _applyNatureVolume();
+      return;
     }
+
+    final source = await _songSourceFor(scene);
+    await player.play(source);
+    _songStarted = true;
     await _applyNatureVolume();
+  }
+
+  Future<Source> _songSourceFor(AmbienceScene? scene) async {
+    if (scene != null) {
+      try {
+        final uri = await _catalog.resolveTrack(scene);
+        if (uri != null) {
+          return UrlSource(uri.toString());
+        }
+      } catch (_) {
+        // Fall through to local asset.
+      }
+    }
+    return AssetSource(songPath);
   }
 
   Future<void> pauseSong() async {
