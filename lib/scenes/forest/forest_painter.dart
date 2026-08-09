@@ -1061,8 +1061,8 @@ class ForestPainter extends CustomPainter {
     Size size, {
     required double breath,
   }) {
-    if (presenceCount <= 0) return;
-    final n = _presenceSparkCount(presenceCount);
+    // Always paint the full field for now — count can be sparse early on.
+    final n = presenceSparkMax;
     final rng = math.Random(53);
 
     // Drift freely in mid-air over the lake — not grounded on the shore.
@@ -1146,18 +1146,6 @@ class ForestPainter extends CustomPainter {
         Paint()..color = ForestPalette.presenceCore.withValues(alpha: alpha),
       );
     }
-  }
-
-  int _presenceSparkCount(int people) {
-    if (people <= 0) return 0;
-    if (people <= 3) return people;
-    if (people < 20) {
-      return (3 + ((people - 3) / 4).round()).clamp(3, 7);
-    }
-    if (people < 60) {
-      return (7 + ((people - 20) / 20).round()).clamp(7, presenceSparkMax);
-    }
-    return presenceSparkMax;
   }
 
   @override

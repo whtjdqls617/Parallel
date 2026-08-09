@@ -9,10 +9,17 @@ import 'desert_painter.dart';
 
 /// Full-bleed desert. Empty place. Shared only by the quiet count.
 class DesertScene extends StatefulWidget {
-  const DesertScene({super.key, this.presenceCount = 127});
+  const DesertScene({
+    super.key,
+    this.presenceCount = 0,
+    this.useDemoDrift = false,
+  });
 
   /// People currently resting in this same moment, worldwide.
   final int presenceCount;
+
+  /// Local ±1 drift for polish demos. Off when a live feed is wired.
+  final bool useDemoDrift;
 
   @override
   State<DesertScene> createState() => _DesertSceneState();
@@ -31,8 +38,7 @@ class _DesertSceneState extends State<DesertScene>
   int? _sandTo;
   double? _sandChangeAt;
 
-  /// Live presence — follows [widget.presenceCount], with a soft demo drift
-  /// so the wipe/rewrite can be felt before a real feed is wired.
+  /// Live presence — follows [widget.presenceCount].
   late int _liveCount;
   double _nextDemoAt = 9;
 
@@ -43,7 +49,7 @@ class _DesertSceneState extends State<DesertScene>
     _sandSettled = widget.presenceCount;
     _ticker = createTicker((elapsed) {
       final t = elapsed.inMicroseconds / 1e6;
-      _maybeDemoDrift(t);
+      if (widget.useDemoDrift) _maybeDemoDrift(t);
       _maybeSettleSand(t);
       setState(() => _elapsed = elapsed);
     })..start();

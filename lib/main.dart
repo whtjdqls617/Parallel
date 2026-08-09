@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'app/parallel_app.dart';
 import 'audio/ambient_music.dart';
 import 'firebase_options.dart';
+import 'subscription/subscription_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +15,10 @@ Future<void> main() async {
   } catch (_) {
     // Reads still work; writes require auth.
   }
+  // RevenueCat + Firebase uid — features stay unlocked until we gate later.
+  await SubscriptionService.instance.start(
+    firebaseUid: FirebaseAuth.instance.currentUser?.uid,
+  );
   // Don't pause Spotify / other apps when our nature bed starts.
   await AmbientMusic.ensureMixWithOthers();
   runApp(const ParallelApp());

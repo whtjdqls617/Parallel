@@ -9,10 +9,17 @@ import 'forest_painter.dart';
 
 /// Moonlit lakeside. Soft water. Shared only by the quiet count.
 class ForestScene extends StatefulWidget {
-  const ForestScene({super.key, this.presenceCount = 127});
+  const ForestScene({
+    super.key,
+    this.presenceCount = 0,
+    this.useDemoDrift = false,
+  });
 
   /// People currently resting in this same moment, worldwide.
   final int presenceCount;
+
+  /// Local ±1 drift for polish demos. Off when a live feed is wired.
+  final bool useDemoDrift;
 
   @override
   State<ForestScene> createState() => _ForestSceneState();
@@ -38,7 +45,7 @@ class _ForestSceneState extends State<ForestScene>
     _mossSettled = widget.presenceCount;
     _ticker = createTicker((elapsed) {
       final t = elapsed.inMicroseconds / 1e6;
-      _maybeDemoDrift(t);
+      if (widget.useDemoDrift) _maybeDemoDrift(t);
       _maybeSettleMoss(t);
       setState(() => _elapsed = elapsed);
     })..start();

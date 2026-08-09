@@ -1,8 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../audio/ambient_music.dart';
+import '../memo/memo.dart';
+import '../presence/presence_service.dart';
 import '../scenes/desert/desert_scene.dart';
 import '../scenes/forest/forest_scene.dart';
+import '../subscription/subscription_debug_sheet.dart';
 import '../theme/desert_palette.dart';
 import '../theme/forest_palette.dart';
 
@@ -33,19 +38,28 @@ class _ScenePicker extends StatefulWidget {
   State<_ScenePicker> createState() => _ScenePickerState();
 }
 
-class _ScenePickerState extends State<_ScenePicker> {
+class _ScenePickerState extends State<_ScenePicker>
+    with WidgetsBindingObserver {
   _SceneKind _kind = _SceneKind.forest;
   final AmbientMusic _audio = AmbientMusic();
+  final PresenceService _presence = PresenceService();
   bool _musicOn = false;
+  int _presenceCount = 0;
+  StreamSubscription<int>? _presenceSub;
 
   AmbienceScene get _ambience =>
       _kind == _SceneKind.forest ? AmbienceScene.forest : AmbienceScene.desert;
 
+  MemoTheme get _memoTheme =>
+      _kind == _SceneKind.forest ? MemoTheme.forest : MemoTheme.desert;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Nature bed on by default; may be blocked until first gesture on some platforms.
     _startNature();
+    unawaited(_joinPresence());
   }
 
   Future<void> _startNature() async {
@@ -56,8 +70,39 @@ class _ScenePickerState extends State<_ScenePicker> {
     }
   }
 
+  Future<void> _joinPresence() async {
+    try {
+      await _presence.enter(_memoTheme);
+      _listenPresence();
+    } catch (_) {
+      // Keep local fallback count of 1.
+    }
+  }
+
+  void _listenPresence() {
+    _presenceSub?.cancel();
+    _presenceSub = _presence.watchCount(_memoTheme).listen(
+      (count) {
+        if (!mounted) return;
+        if (count == _presenceCount) return;
+        setState(() => _presenceCount = count);
+      },
+      onError: (_) {},
+    );
+  }
+
   Future<void> _selectScene(_SceneKind kind) async {
-    setState(() => _kind = kind);
+    setState(() {
+      _kind = kind;
+      // Hide the number until the new theme's live count arrives.
+      _presenceCount = 0;
+    });
+    _listenPresence();
+    try {
+      await _presence.enter(
+        kind == _SceneKind.forest ? MemoTheme.forest : MemoTheme.desert,
+      );
+    } catch (_) {}
     try {
       await _audio.setScene(
         kind == _SceneKind.forest ? AmbienceScene.forest : AmbienceScene.desert,
@@ -79,7 +124,24 @@ class _ScenePickerState extends State<_ScenePicker> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        unawaited(_joinPresence());
+      case AppLifecycleState.inactive:
+        break;
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        unawaited(_presence.leave());
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _presenceSub?.cancel();
+    unawaited(_presence.leave());
     _audio.dispose();
     super.dispose();
   }
@@ -93,7 +155,10 @@ class _ScenePickerState extends State<_ScenePicker> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          if (isForest) const ForestScene() else const DesertScene(),
+          if (isForest)
+            ForestScene(presenceCount: _presenceCount)
+          else
+            DesertScene(presenceCount: _presenceCount),
           SafeArea(
             child: Align(
               alignment: Alignment.bottomCenter,
@@ -123,6 +188,10 @@ class _ScenePickerState extends State<_ScenePicker> {
                           on: _musicOn,
                           onTap: _toggleMusic,
                         ),
+                        // Temporary subscription test entry — remove later.
+                        _DebugSubButton(
+                          onTap: () => showSubscriptionDebugSheet(context),
+                        ),
                       ],
                     ),
                   ),
@@ -131,6 +200,28 @@ class _ScenePickerState extends State<_ScenePicker> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DebugSubButton extends StatelessWidget {
+  const _DebugSubButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Icon(
+          Icons.workspace_premium_rounded,
+          size: 18,
+          color: Colors.white.withValues(alpha: 0.85),
+        ),
       ),
     );
   }
