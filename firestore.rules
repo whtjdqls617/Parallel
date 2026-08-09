@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /memos/{memoId} {
+      allow read: if true;
+
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['theme', 'text', 'artist', 'song', 'createdAt', 'expiresAt', 'uid'])
+        && request.resource.data.theme in ['desert', 'forest']
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 80
+        && request.resource.data.artist is string
+        && request.resource.data.artist.size() <= 40
+        && request.resource.data.song is string
+        && request.resource.data.song.size() <= 40
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt > request.time
+        && request.resource.data.expiresAt <= request.time + duration.value(48, 'h')
+        && request.resource.data.uid == request.auth.uid;
+
+      allow delete: if request.auth != null
+        && resource.data.expiresAt is timestamp
+        && resource.data.expiresAt <= request.time;
+
+      allow update: if false;
+    }
+  }
+}

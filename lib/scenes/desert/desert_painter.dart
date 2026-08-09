@@ -1083,13 +1083,13 @@ class DesertPainter extends CustomPainter {
     final fontSize = size.shortestSide * 0.078;
     final hand = math.Random(sandCount * 31 + 7);
 
-    // Right-middle of the wind-rippled sand — a little higher than the lap.
-    final anchor = Offset(size.width * 0.74, size.height * 0.80);
+    // Left-middle of the wind-rippled sand — clear of the right-side board.
+    final anchor = Offset(size.width * 0.26, size.height * 0.80);
 
     canvas.save();
     canvas.translate(anchor.dx, anchor.dy);
-    // Opposite slant — like writing toward yourself with the right hand.
-    canvas.rotate(0.18);
+    // Soft slant, as if written with the left of the lap.
+    canvas.rotate(-0.12);
     final tip = Matrix4.identity()
       ..setEntry(3, 1, 0.0016)
       ..scaleByDouble(1.08, 0.62, 1.0, 1.0);

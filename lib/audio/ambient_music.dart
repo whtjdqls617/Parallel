@@ -25,8 +25,10 @@ class AmbientMusic {
   /// Keep in sync with generated nature WAVs.
   static const _desertBedLength = Duration(milliseconds: 25200);
   static const _forestBedLength = Duration(milliseconds: 25000);
-  static const _fadeOut = Duration(milliseconds: 450);
-  static const _fadeIn = Duration(milliseconds: 350);
+  /// Soft turnaround — start early so the bed never hard-stops mid-sound.
+  static const _fadeOut = Duration(milliseconds: 800);
+  static const _fadeIn = Duration(milliseconds: 650);
+  static const _cycleMargin = Duration(milliseconds: 400);
 
   static bool _audioContextReady = false;
 
@@ -127,7 +129,9 @@ class AmbientMusic {
     final scene = _natureScene;
     if (_disposed || scene == null || _nature == null) return;
 
-    final wait = _bedLength(scene) - _fadeOut;
+    // Fade before the file ends — same path for desert and forest.
+    final wait = _bedLength(scene) - _fadeOut - _cycleMargin;
+    if (wait <= Duration.zero) return;
     _loopTimer = Timer(wait, () {
       if (_disposed || _natureScene != scene) return;
       unawaited(_softCycle());
@@ -154,7 +158,12 @@ class AmbientMusic {
       await player.play(AssetSource(path));
       if (_disposed || epoch != _natureEpoch) return;
 
-      await _fade(player, from: 0, to: _natureVolume, ms: _fadeIn.inMilliseconds);
+      await _fade(
+        player,
+        from: 0,
+        to: _natureVolume,
+        ms: _fadeIn.inMilliseconds,
+      );
     } catch (_) {
       // Retry on the next cycle rather than leave silence forever.
     } finally {

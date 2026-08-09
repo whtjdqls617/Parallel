@@ -19,10 +19,8 @@ class DefaultFirebaseOptions {
       case TargetPlatform.iOS:
         return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        // Same Firebase project; macOS app entry not registered separately yet.
+        return macos;
       case TargetPlatform.windows:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for windows - '
@@ -55,5 +53,14 @@ class DefaultFirebaseOptions {
     projectId: 'parallel-e7b98',
     storageBucket: 'parallel-e7b98.firebasestorage.app',
     iosBundleId: 'com.parallel.ios',
+  );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyDp8lnLoLkq6NfkBYYmO--fguSfgJpZFcs',
+    appId: '1:864286289631:ios:23090e743a86ba8c3dc36a',
+    messagingSenderId: '864286289631',
+    projectId: 'parallel-e7b98',
+    storageBucket: 'parallel-e7b98.firebasestorage.app',
+    iosBundleId: 'com.example.parallel',
   );
 }

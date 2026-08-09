@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import '../../memo/memo.dart';
+import '../../memo/memo_board.dart';
 import '../../theme/desert_palette.dart';
 import 'desert_painter.dart';
 
@@ -80,19 +82,17 @@ class _DesertSceneState extends State<DesertScene>
   }
 
   void _maybeDemoDrift(double t) {
-    // Temporary: gentle count drift so the hand rewrite is visible in demos.
-    // Remove when a live presence feed drives [presenceCount].
     if (t < _nextDemoAt) return;
     if (_sandChangeAt != null) {
       _nextDemoAt = t + 2;
       return;
     }
-    final delta = (t * 17).floor().isEven ? 1 : -1;
-    final next = (_liveCount + delta).clamp(3, 999);
+    final delta = (t * 7).floor() % 3 == 0 ? 1 : -1;
+    final next = (_liveCount + delta).clamp(1, 9999);
     if (next == _liveCount) return;
     _liveCount = next;
     _beginSandChange(next);
-    _nextDemoAt = t + 8 + (next % 5);
+    _nextDemoAt = t + 7 + (t * 3).floor() % 5;
   }
 
   void _maybeSettleSand(double t) {
@@ -160,15 +160,21 @@ class _DesertSceneState extends State<DesertScene>
 
     return ColoredBox(
       color: DesertPalette.canvas,
-      child: CustomPaint(
-        painter: DesertPainter(
-          t: t,
-          presenceCount: _liveCount,
-          sandCount: sand.sandCount,
-          sandReveal: sand.reveal,
-          sandErase: sand.erase,
-        ),
-        size: Size.infinite,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          CustomPaint(
+            painter: DesertPainter(
+              t: t,
+              presenceCount: _liveCount,
+              sandCount: sand.sandCount,
+              sandReveal: sand.reveal,
+              sandErase: sand.erase,
+            ),
+            size: Size.infinite,
+          ),
+          const MemoBoardLayer(theme: MemoTheme.desert),
+        ],
       ),
     );
   }

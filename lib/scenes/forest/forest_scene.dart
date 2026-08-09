@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import '../../memo/memo.dart';
+import '../../memo/memo_board.dart';
 import '../../theme/forest_palette.dart';
 import 'forest_painter.dart';
 
@@ -153,15 +155,21 @@ class _ForestSceneState extends State<ForestScene>
 
     return ColoredBox(
       color: ForestPalette.canvas,
-      child: CustomPaint(
-        painter: ForestPainter(
-          t: t,
-          presenceCount: _liveCount,
-          mossCount: moss.mossCount,
-          mossReveal: moss.reveal,
-          mossErase: moss.erase,
-        ),
-        size: Size.infinite,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          CustomPaint(
+            painter: ForestPainter(
+              t: t,
+              presenceCount: _liveCount,
+              mossCount: moss.mossCount,
+              mossReveal: moss.reveal,
+              mossErase: moss.erase,
+            ),
+            size: Size.infinite,
+          ),
+          const MemoBoardLayer(theme: MemoTheme.forest),
+        ],
       ),
     );
   }
