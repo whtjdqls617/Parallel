@@ -1,7 +1,0 @@
-{
-  "dart.analysisExcludedFolders": [
-    "build",
-    "ios/Pods",
-    ".dart_tool"
-  ]
-}
