@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import 'memo.dart';
 import 'memo_reader.dart';
+import 'memo_service.dart';
+import 'memo_sticky_layout.dart';
 
 /// Large centered memo board — weathered theme frame; tap a scrap to zoom in.
 Future<void> showMemoPanel(
@@ -11,6 +14,8 @@ Future<void> showMemoPanel(
   required MemoTheme theme,
   required List<Memo> memos,
   required Future<void> Function() onCompose,
+  bool canCompose = true,
+  MemoService? service,
 }) {
   return showGeneralDialog<void>(
     context: context,
@@ -25,6 +30,8 @@ Future<void> showMemoPanel(
             theme: theme,
             memos: memos,
             onCompose: onCompose,
+            canCompose: canCompose,
+            service: service ?? MemoService(),
           ),
         ),
       );
@@ -51,23 +58,67 @@ Future<void> showMemoPanel(
   );
 }
 
-class _MemoPanelBody extends StatelessWidget {
+class _MemoPanelBody extends StatefulWidget {
   const _MemoPanelBody({
     required this.theme,
     required this.memos,
     required this.onCompose,
+    required this.canCompose,
+    required this.service,
   });
 
   final MemoTheme theme;
   final List<Memo> memos;
   final Future<void> Function() onCompose;
+  final bool canCompose;
+  final MemoService service;
+
+  @override
+  State<_MemoPanelBody> createState() => _MemoPanelBodyState();
+}
+
+class _MemoPanelBodyState extends State<_MemoPanelBody> {
+  late List<Memo> _memos;
+  StreamSubscription<List<Memo>>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    _memos = List<Memo>.from(widget.memos);
+    _sub = widget.service.watchPool(widget.theme).listen((pool) {
+      if (!mounted) return;
+      setState(() => _memos = pool);
+    });
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _openReader(Memo memo) async {
+    final updated = await showMemoReader(
+      context,
+      memo: memo,
+      theme: widget.theme,
+      service: widget.service,
+    );
+    if (updated == null || !mounted) return;
+    setState(() {
+      final i = _memos.indexWhere((m) => m.id == updated.id);
+      if (i >= 0) _memos[i] = updated;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isForest = theme == MemoTheme.forest;
-    final iconColor = isForest
-        ? const Color(0xFFD0C4A8)
-        : const Color(0xFF4A3018);
+    final theme = widget.theme;
+    final iconColor = switch (theme) {
+      MemoTheme.forest => const Color(0xFFD0C4A8),
+      MemoTheme.ocean => const Color(0xFFC8D8E0),
+      MemoTheme.desert => const Color(0xFF4A3018),
+    };
     final size = MediaQuery.sizeOf(context);
 
     return Material(
@@ -101,29 +152,26 @@ class _MemoPanelBody extends StatelessWidget {
                   ],
                 ),
                 Expanded(
-                  child: memos.isEmpty
+                  child: _memos.isEmpty
                       ? const SizedBox.expand()
                       : GridView.builder(
-                          padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+                          padding: const EdgeInsets.fromLTRB(10, 4, 10, 8),
                           gridDelegate:
                               const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
-                            mainAxisSpacing: 14,
-                            crossAxisSpacing: 14,
-                            childAspectRatio: 1.05,
+                            mainAxisSpacing: 16,
+                            crossAxisSpacing: 16,
+                            childAspectRatio: 1.0,
                           ),
-                          itemCount: memos.length,
+                          itemCount: _memos.length,
                           itemBuilder: (context, index) {
-                            final memo = memos[index];
+                            final memo = _memos[index];
                             return _MemoScrap(
                               memo: memo,
                               theme: theme,
                               index: index,
-                              onTap: () => showMemoReader(
-                                context,
-                                memo: memo,
-                                theme: theme,
-                              ),
+                              mine: memo.isOwnedBy(widget.service.currentUid),
+                              onTap: () => _openReader(memo),
                             );
                           },
                         ),
@@ -133,14 +181,20 @@ class _MemoPanelBody extends StatelessWidget {
                   child: IconButton(
                     onPressed: () async {
                       Navigator.of(context).maybePop();
-                      await onCompose();
+                      await widget.onCompose();
                     },
                     icon: Icon(
-                      Icons.edit_note_rounded,
-                      color: iconColor,
+                      widget.canCompose
+                          ? Icons.edit_note_rounded
+                          : Icons.lock_outline_rounded,
+                      color: iconColor.withValues(
+                        alpha: widget.canCompose ? 1 : 0.55,
+                      ),
                       size: 28,
                     ),
-                    tooltip: '흔적 남기기',
+                    tooltip: widget.canCompose
+                        ? '흔적 남기기'
+                        : '구독하면 남길 수 있어요',
                   ),
                 ),
               ],
@@ -160,7 +214,6 @@ class _WeatheredBoardPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final isForest = theme == MemoTheme.forest;
     final rect = Offset.zero & size;
 
     canvas.drawRRect(
@@ -172,9 +225,23 @@ class _WeatheredBoardPainter extends CustomPainter {
     );
 
     final board = RRect.fromRectAndRadius(rect, const Radius.circular(5));
-    final colors = isForest
-        ? const [Color(0xFF2A3224), Color(0xFF1A2218), Color(0xFF12180E)]
-        : const [Color(0xFFD2A878), Color(0xFFB88858), Color(0xFF9A6A38)];
+    final colors = switch (theme) {
+      MemoTheme.forest => const [
+        Color(0xFF2A3224),
+        Color(0xFF1A2218),
+        Color(0xFF12180E),
+      ],
+      MemoTheme.ocean => const [
+        Color(0xFF8A1E1E),
+        Color(0xFF6A1414),
+        Color(0xFF4A0E0E),
+      ],
+      MemoTheme.desert => const [
+        Color(0xFFD2A878),
+        Color(0xFFB88858),
+        Color(0xFF9A6A38),
+      ],
+    };
 
     canvas.drawRRect(
       board,
@@ -191,16 +258,26 @@ class _WeatheredBoardPainter extends CustomPainter {
     canvas.drawRRect(
       RRect.fromRectAndRadius(face, const Radius.circular(3)),
       Paint()
-        ..color = isForest
-            ? const Color(0xFF243028)
-            : const Color(0xFFC89860),
+        ..color = switch (theme) {
+          MemoTheme.forest => const Color(0xFF243028),
+          MemoTheme.ocean => const Color(0xFF5A1010),
+          MemoTheme.desert => const Color(0xFFC89860),
+        },
     );
 
     final grain = Paint()
-      ..color = isForest ? const Color(0xFF3A4434) : const Color(0xFFA87840)
+      ..color = switch (theme) {
+        MemoTheme.forest => const Color(0xFF3A4434),
+        MemoTheme.ocean => const Color(0xFFA03030),
+        MemoTheme.desert => const Color(0xFFA87840),
+      }
       ..strokeWidth = 1.1
       ..style = PaintingStyle.stroke;
-    final rng = math.Random(isForest ? 9 : 3);
+    final rng = math.Random(switch (theme) {
+      MemoTheme.forest => 9,
+      MemoTheme.ocean => 13,
+      MemoTheme.desert => 3,
+    });
     for (var i = 0; i < 7; i++) {
       final y = face.top + face.height * (0.12 + i * 0.12);
       final path = Path()
@@ -219,7 +296,11 @@ class _WeatheredBoardPainter extends CustomPainter {
     canvas.drawRRect(
       board,
       Paint()
-        ..color = isForest ? const Color(0xFF4A5A40) : const Color(0xFF6A4018)
+        ..color = switch (theme) {
+          MemoTheme.forest => const Color(0xFF4A5A40),
+          MemoTheme.ocean => const Color(0xFFB84848),
+          MemoTheme.desert => const Color(0xFF6A4018),
+        }
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.2,
     );
@@ -235,71 +316,161 @@ class _MemoScrap extends StatelessWidget {
     required this.memo,
     required this.theme,
     required this.index,
+    required this.mine,
     required this.onTap,
   });
 
   final Memo memo;
   final MemoTheme theme;
   final int index;
+  final bool mine;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final isForest = theme == MemoTheme.forest;
-    final paper = isForest
-        ? (index.isEven ? const Color(0xFFE6D8B8) : const Color(0xFFDCCEAE))
-        : (index.isEven ? const Color(0xFFF0E0B8) : const Color(0xFFE6D4A8));
-    final ink = isForest ? const Color(0xFF2A3424) : const Color(0xFF4A2E14);
+    // Own traces: warmer cream so they stand out when a reply lands.
+    final paper = mine
+        ? switch (theme) {
+            MemoTheme.forest => const Color(0xFFF3E8C4),
+            MemoTheme.ocean => const Color(0xFFF0E6D4),
+            MemoTheme.desert => const Color(0xFFFFF0C8),
+          }
+        : switch (theme) {
+            MemoTheme.forest =>
+              index.isEven ? const Color(0xFFE6D8B8) : const Color(0xFFDCCEAE),
+            MemoTheme.ocean =>
+              index.isEven ? const Color(0xFFE0E8EC) : const Color(0xFFD4DEE4),
+            MemoTheme.desert =>
+              index.isEven ? const Color(0xFFF0E0B8) : const Color(0xFFE6D4A8),
+          };
+    final ink = switch (theme) {
+      MemoTheme.forest => const Color(0xFF2A3424),
+      MemoTheme.ocean => const Color(0xFF1C3038),
+      MemoTheme.desert => const Color(0xFF4A2E14),
+    };
     final mute = ink.withValues(alpha: 0.45);
     final rot = ((index % 5) - 2) * 0.035;
 
     final lead = memo.hasSong ? memo.songLabel : memo.text.trim();
     final preview = lead.isEmpty
         ? '…'
-        : (lead.length > 40 ? '${lead.substring(0, 40)}…' : lead);
+        : (lead.length > 48 ? '${lead.substring(0, 48)}…' : lead);
 
     return GestureDetector(
       onTap: onTap,
       child: Transform.rotate(
         angle: rot,
-        child: CustomPaint(
-          painter: _ScrapPainter(paper: paper, seed: index * 17 + 3),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  memo.hasSong ? '♪' : '·',
-                  style: TextStyle(
-                    fontFamily: 'Georgia',
-                    fontSize: 12,
-                    color: mute,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Expanded(
-                  child: Text(
-                    preview,
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontFamily: 'Georgia',
-                      fontSize: 15,
-                      height: 1.32,
-                      color: ink,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            CustomPaint(
+              painter: _ScrapPainter(paper: paper, seed: index * 17 + 3),
+              child: SizedBox.expand(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                  child: Align(
+                    alignment: Alignment.topLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: 0.72,
+                      heightFactor: 0.55,
+                      alignment: Alignment.topLeft,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            memo.hasSong ? '♪' : '·',
+                            style: TextStyle(
+                              fontFamily: 'Georgia',
+                              fontSize: 13,
+                              color: mute,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Expanded(
+                            child: Text(
+                              preview,
+                              maxLines: 4,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: 'Georgia',
+                                fontSize: 16,
+                                height: 1.35,
+                                color: ink,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+            if (memo.hasReply)
+              Positioned.fill(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    const maxTilt = 0.10;
+                    final replies = memo.replies;
+                    final shown = replies.length > 3
+                        ? replies.sublist(replies.length - 3)
+                        : replies;
+                    const base = 26.0;
+                    final sticky =
+                        MemoStickyPlacer.sized(base, shown.length);
+                    final positions = MemoStickyPlacer.layoutReplies(
+                      bounds: Size(
+                        constraints.maxWidth,
+                        constraints.maxHeight,
+                      ),
+                      size: base,
+                      replies: shown,
+                      seed: memo.id.hashCode ^ index,
+                      lowerBand: !memo.hasSong,
+                      avoid: [
+                        const Rect.fromLTRB(0.04, 0.04, 0.62, 0.50),
+                        if (memo.hasSong)
+                          const Rect.fromLTRB(0.04, 0.48, 0.58, 0.76),
+                      ],
+                    );
+                    final badges = <Widget>[];
+                    for (var i = 0; i < shown.length; i++) {
+                      final reply = shown[i];
+                      final seed =
+                          (reply.text.hashCode ^ reply.uid.hashCode ^ index)
+                              .abs();
+                      final rng = math.Random(seed);
+                      final pos = positions[i];
+                      badges.add(
+                        Positioned(
+                          left: pos.dx,
+                          top: pos.dy,
+                          child: Transform.rotate(
+                            angle: -maxTilt + rng.nextDouble() * maxTilt * 2,
+                            child: CustomPaint(
+                              size: Size(sticky, sticky),
+                              painter: _PostItPainter(
+                                paper: Color(reply.stickyColorValue),
+                                seed: seed,
+                                adhesive: false,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    return Stack(children: badges);
+                  },
+                ),
+              ),
+          ],
         ),
       ),
     );
   }
 }
 
+/// Theme scrap paper for memo previews — not a sticky note.
 class _ScrapPainter extends CustomPainter {
   _ScrapPainter({required this.paper, required this.seed});
 
@@ -309,7 +480,6 @@ class _ScrapPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rng = math.Random(seed);
-
     final path = Path()
       ..moveTo(2 + rng.nextDouble() * 2, 3)
       ..lineTo(size.width - 2 - rng.nextDouble() * 2, 1 + rng.nextDouble() * 2)
@@ -344,4 +514,51 @@ class _ScrapPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _ScrapPainter oldDelegate) =>
       oldDelegate.paper != paper || oldDelegate.seed != seed;
+}
+
+/// Reply sticky only — yellow / pink post-it.
+class _PostItPainter extends CustomPainter {
+  _PostItPainter({
+    required this.paper,
+    required this.seed,
+    this.adhesive = true,
+  });
+
+  final Color paper;
+  final int seed;
+  final bool adhesive;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rng = math.Random(seed);
+    final r = RRect.fromRectAndRadius(
+      Rect.fromLTWH(1, 1, size.width - 3, size.height - 3),
+      const Radius.circular(2.5),
+    );
+
+    canvas.drawRRect(
+      r.shift(Offset(1.4 + rng.nextDouble() * 0.4, 2.0 + rng.nextDouble() * 0.5)),
+      Paint()..color = const Color(0x55000000),
+    );
+
+    canvas.drawRRect(r, Paint()..color = paper);
+
+    if (adhesive) {
+      final bandH = size.height * 0.12;
+      canvas.drawRRect(
+        RRect.fromRectAndCorners(
+          Rect.fromLTWH(1, 1, size.width - 3, bandH),
+          topLeft: const Radius.circular(2.5),
+          topRight: const Radius.circular(2.5),
+        ),
+        Paint()..color = Color.lerp(paper, Colors.white, 0.28)!,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _PostItPainter oldDelegate) =>
+      oldDelegate.paper != paper ||
+      oldDelegate.seed != seed ||
+      oldDelegate.adhesive != adhesive;
 }

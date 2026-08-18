@@ -16,6 +16,8 @@ abstract final class MemoBoardPaint {
         _paintDesertBoard(canvas, frame);
       case MemoTheme.forest:
         _paintForestBoard(canvas, frame);
+      case MemoTheme.ocean:
+        _paintOceanBoard(canvas, frame);
     }
     canvas.restore();
   }
@@ -193,6 +195,82 @@ abstract final class MemoBoardPaint {
     for (final nx in [0.14, 0.86]) {
       canvas.drawCircle(
         Offset(face.left + face.width * nx, face.top + face.height * 0.22),
+        math.max(1.0, w * 0.018),
+        nail,
+      );
+    }
+  }
+
+  static void _paintOceanBoard(Canvas canvas, Rect frame) {
+    final w = frame.width;
+    final h = frame.height;
+    final face = _face(frame);
+
+    // Wet sand mound.
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(frame.center.dx, frame.bottom - h * 0.04),
+        width: w * 0.9,
+        height: h * 0.2,
+      ),
+      Paint()..color = const Color(0xFF9A8060),
+    );
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(frame.center.dx, frame.bottom - h * 0.015),
+        width: w * 0.58,
+        height: h * 0.09,
+      ),
+      Paint()..color = const Color(0xFF7A6448),
+    );
+
+    final postW = w * 0.06;
+    final postTop = face.top + face.height * 0.1;
+    final postBottom = frame.bottom - h * 0.012;
+    for (final x in [frame.left + w * 0.16, frame.right - w * 0.16 - postW]) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTRB(x, postTop, x + postW, postBottom),
+          const Radius.circular(1),
+        ),
+        Paint()..color = const Color(0xFF3A1814),
+      );
+    }
+
+    final board = RRect.fromRectAndRadius(face, const Radius.circular(2));
+    canvas.drawRRect(board, Paint()..color = const Color(0xFF2A0C0C));
+    canvas.drawRRect(
+      board,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          face.topLeft,
+          face.bottomRight,
+          const [
+            Color(0xFF8A1E1E),
+            Color(0xFF6A1414),
+            Color(0xFF4A0E0E),
+          ],
+          const [0.0, 0.5, 1.0],
+        ),
+    );
+
+    final grain = Paint()
+      ..color = const Color(0xFFA83838)
+      ..strokeWidth = 0.85
+      ..style = PaintingStyle.stroke;
+    for (var i = 0; i < 2; i++) {
+      final y = face.top + face.height * (0.36 + i * 0.24);
+      canvas.drawLine(
+        Offset(face.left + face.width * 0.1, y),
+        Offset(face.right - face.width * 0.1, y + (i.isEven ? 0.6 : -0.6)),
+        grain,
+      );
+    }
+
+    final nail = Paint()..color = const Color(0xFFC8A070);
+    for (final nx in [0.14, 0.86]) {
+      canvas.drawCircle(
+        Offset(face.left + face.width * nx, face.top + face.height * 0.2),
         math.max(1.0, w * 0.018),
         nail,
       );

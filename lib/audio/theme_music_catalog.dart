@@ -14,12 +14,14 @@ class ThemeMusicCatalog {
   static String folderFor(AmbienceScene scene) => switch (scene) {
     AmbienceScene.desert => 'music/desert',
     AmbienceScene.forest => 'music/forest',
+    AmbienceScene.ocean => 'music/ocean',
   };
 
   /// Preferred fixed filename; falls back to first audio object in the folder.
   static String preferredFile(AmbienceScene scene) => switch (scene) {
     AmbienceScene.desert => 'desert_1.mp3',
     AmbienceScene.forest => 'forest_ambient.mp3',
+    AmbienceScene.ocean => 'ocean_1.mp3',
   };
 
   Future<Uri?> resolveTrack(AmbienceScene scene) async {

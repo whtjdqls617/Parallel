@@ -11,10 +11,10 @@ class PurchaseAttempt {
   final String message;
 }
 
-/// RevenueCat wiring only — no feature gating yet.
+/// RevenueCat subscription state for Parallel Plus.
 ///
-/// Call [start] once after Firebase Auth has a uid. Use [isSubscribed] later
-/// when locking premium surfaces; for now the rest of the app ignores it.
+/// Call [start] once after Firebase Auth has a uid. Feature gates use
+/// [isSubscribed] (forest/ocean scenes + memo compose).
 class SubscriptionService extends ChangeNotifier {
   SubscriptionService._();
   static final SubscriptionService instance = SubscriptionService._();

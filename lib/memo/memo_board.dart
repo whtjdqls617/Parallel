@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -9,8 +10,10 @@ import 'memo_compose_sheet.dart';
 import 'memo_panel.dart';
 import 'memo_reveal_controller.dart';
 import 'memo_service.dart';
+import '../subscription/subscription_gate.dart';
+import '../subscription/subscription_service.dart';
 
-/// Overlay: planted board + one cryptic teaser note. Tap opens center list.
+/// Overlay: planted board + up to three teaser notes. Tap opens center list.
 class MemoBoardLayer extends StatefulWidget {
   const MemoBoardLayer({
     super.key,
@@ -36,8 +39,8 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
   void initState() {
     super.initState();
     _service = widget._service ?? MemoService();
-    // Board teaser only — one quiet scrap.
-    _reveal = MemoRevealController(maxVisible: 1);
+    // Board teasers — up to three, revealed one by one from the front.
+    _reveal = MemoRevealController(maxVisible: 3);
     _reveal.addListener(_onReveal);
     _listen();
   }
@@ -75,6 +78,14 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
 
   Future<void> _compose() async {
     if (_submitting) return;
+    if (!SubscriptionService.instance.isSubscribed) {
+      await showSubscriptionGate(
+        context,
+        reason: '흔적을 남기려면 Parallel Plus가 필요해요. 읽기는 누구나 할 수 있어요.',
+      );
+      return;
+    }
+
     final draft = await showMemoComposeSheet(
       context,
       theme: widget.theme,
@@ -110,7 +121,9 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
       context,
       theme: widget.theme,
       memos: _reveal.pool,
+      canCompose: SubscriptionService.instance.isSubscribed,
       onCompose: _compose,
+      service: _service,
     );
   }
 
@@ -121,9 +134,7 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
         final sceneSize = Size(constraints.maxWidth, constraints.maxHeight);
         final frame = MemoBoardLayout.frameRect(sceneSize, widget.theme);
         final face = MemoBoardLayout.faceRect(sceneSize, widget.theme);
-        final teaser = _reveal.visibleMemos.isEmpty
-            ? null
-            : _reveal.visibleMemos.first;
+        final teasers = _reveal.visibleMemos;
 
         return Stack(
           fit: StackFit.expand,
@@ -142,17 +153,25 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
                 onTap: _openPanel,
               ),
             ),
-            if (teaser != null)
+            if (teasers.isNotEmpty)
               Positioned(
                 left: face.left,
                 top: face.top,
                 width: face.width,
                 height: face.height,
-                child: _TeaserNote(
-                  key: ValueKey(teaser.id),
-                  theme: widget.theme,
-                  faceSize: face.size,
-                  onTap: _openPanel,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    for (var i = 0; i < teasers.length; i++)
+                      _TeaserNote(
+                        key: ValueKey(teasers[i].id),
+                        theme: widget.theme,
+                        faceSize: face.size,
+                        index: i,
+                        mine: teasers[i].isOwnedBy(_service.currentUid),
+                        onTap: _openPanel,
+                      ),
+                  ],
                 ),
               ),
           ],
@@ -168,11 +187,15 @@ class _TeaserNote extends StatefulWidget {
     super.key,
     required this.theme,
     required this.faceSize,
+    required this.index,
+    required this.mine,
     required this.onTap,
   });
 
   final MemoTheme theme;
   final Size faceSize;
+  final int index;
+  final bool mine;
   final VoidCallback onTap;
 
   @override
@@ -190,11 +213,11 @@ class _TeaserNoteState extends State<_TeaserNote>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1100),
+      duration: const Duration(milliseconds: 900),
     );
     _opacity = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
     _slide = Tween<Offset>(
-      begin: const Offset(0, 0.18),
+      begin: const Offset(0, 0.22),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     _controller.forward();
@@ -208,40 +231,104 @@ class _TeaserNoteState extends State<_TeaserNote>
 
   @override
   Widget build(BuildContext context) {
-    final isForest = widget.theme == MemoTheme.forest;
-    final paper = isForest
-        ? const Color(0xFFD2C6A8)
-        : const Color(0xFFE2D0A8);
+    // Small theme scraps in a loose row — front → back left-to-right.
+    const pad = 2.0;
+    final maxW = math.max(0.0, widget.faceSize.width - pad * 2);
+    final maxH = math.max(0.0, widget.faceSize.height - pad * 2);
+    final noteW = (widget.faceSize.width * 0.30).clamp(0.0, maxW);
+    final noteH = (widget.faceSize.height * 0.42).clamp(0.0, maxH);
+    final slot = widget.index.clamp(0, 2);
+    final left = (pad +
+            (widget.faceSize.width - noteW - pad * 2) *
+                (slot == 0
+                    ? 0.08
+                    : slot == 1
+                        ? 0.36
+                        : 0.62))
+        .clamp(pad, math.max(pad, widget.faceSize.width - noteW - pad))
+        .toDouble();
+    final top = (pad +
+            widget.faceSize.height *
+                (slot == 0
+                    ? 0.22
+                    : slot == 1
+                        ? 0.14
+                        : 0.28))
+        .clamp(pad, math.max(pad, widget.faceSize.height - noteH - pad))
+        .toDouble();
+    final paper = widget.mine
+        ? switch (widget.theme) {
+            MemoTheme.forest => const Color(0xFFF3E8C4),
+            MemoTheme.ocean => const Color(0xFFF0E6D4),
+            MemoTheme.desert => const Color(0xFFFFF0C8),
+          }
+        : switch (widget.theme) {
+            MemoTheme.forest =>
+              slot.isEven ? const Color(0xFFD2C6A8) : const Color(0xFFC8B898),
+            MemoTheme.ocean =>
+              slot.isEven ? const Color(0xFFD0DCE0) : const Color(0xFFC4D0D6),
+            MemoTheme.desert =>
+              slot.isEven ? const Color(0xFFE2D0A8) : const Color(0xFFD8C498),
+          };
+    final angle = slot == 0 ? -0.06 : slot == 1 ? 0.05 : -0.03;
 
-    final noteW = widget.faceSize.width * 0.36;
-    final noteH = widget.faceSize.height * 0.62;
-    final left = widget.faceSize.width * 0.32;
-    final top = widget.faceSize.height * 0.16;
-
-    return Stack(
-      children: [
-        Positioned(
-          left: left.clamp(2.0, widget.faceSize.width - noteW - 2),
-          top: top.clamp(2.0, widget.faceSize.height - noteH - 2),
-          width: noteW,
-          height: noteH,
-          child: FadeTransition(
-            opacity: _opacity,
-            child: SlideTransition(
-              position: _slide,
-              child: Transform.rotate(
-                angle: -0.04,
-                child: GestureDetector(
-                  onTap: widget.onTap,
-                  child: ColoredBox(color: paper),
-                ),
+    return Positioned(
+      left: left,
+      top: top,
+      width: noteW,
+      height: noteH,
+      child: FadeTransition(
+        opacity: _opacity,
+        child: SlideTransition(
+          position: _slide,
+          child: Transform.rotate(
+            angle: angle,
+            child: GestureDetector(
+              onTap: widget.onTap,
+              child: CustomPaint(
+                size: Size(noteW, noteH),
+                painter: _TeaserScrapPainter(paper: paper, seed: slot * 17 + 5),
               ),
             ),
           ),
         ),
-      ],
+      ),
     );
   }
+}
+
+class _TeaserScrapPainter extends CustomPainter {
+  _TeaserScrapPainter({required this.paper, required this.seed});
+
+  final Color paper;
+  final int seed;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rng = math.Random(seed);
+    final path = Path()
+      ..moveTo(1.2 + rng.nextDouble(), 1.5 + rng.nextDouble())
+      ..lineTo(size.width - 1.5 - rng.nextDouble(), 1 + rng.nextDouble())
+      ..lineTo(size.width - 1, size.height - 1.5 - rng.nextDouble())
+      ..lineTo(1.5 + rng.nextDouble(), size.height - 1)
+      ..close();
+    canvas.drawPath(
+      path.shift(const Offset(0.9, 1.2)),
+      Paint()..color = const Color(0x55000000),
+    );
+    canvas.drawPath(path, Paint()..color = paper);
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = const Color(0x668A6A40)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _TeaserScrapPainter oldDelegate) =>
+      oldDelegate.paper != paper || oldDelegate.seed != seed;
 }
 
 class _MemoPropPainter extends CustomPainter {

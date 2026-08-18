@@ -41,6 +41,7 @@ dependencies:
   firebase_auth: ^6.1.0
   purchases_flutter: ^10.8.0
   purchases_ui_flutter: ^10.8.0
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:

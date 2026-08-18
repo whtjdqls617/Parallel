@@ -87,13 +87,16 @@ class _MemoComposeBodyState extends State<_MemoComposeBody> {
 
   @override
   Widget build(BuildContext context) {
-    final isForest = widget.theme == MemoTheme.forest;
-    final surface = isForest
-        ? const Color(0xFF1A2820)
-        : const Color(0xFFE8C898);
-    final ink = isForest
-        ? const Color(0xFFE8DCC8)
-        : const Color(0xFF4A3018);
+    final surface = switch (widget.theme) {
+      MemoTheme.forest => const Color(0xFF1A2820),
+      MemoTheme.ocean => const Color(0xFF1A2830),
+      MemoTheme.desert => const Color(0xFFE8C898),
+    };
+    final ink = switch (widget.theme) {
+      MemoTheme.forest => const Color(0xFFE8DCC8),
+      MemoTheme.ocean => const Color(0xFFD8E4E8),
+      MemoTheme.desert => const Color(0xFF4A3018),
+    };
     final hint = ink.withValues(alpha: 0.4);
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
 
@@ -137,7 +140,7 @@ class _MemoComposeBodyState extends State<_MemoComposeBody> {
                   focusNode: _focus,
                   maxLength: Memo.maxTextLength,
                   maxLines: 3,
-                  minLines: 2,
+                  minLines: 3,
                   style: fieldStyle,
                   cursorColor: ink,
                   decoration: _decoration(
@@ -175,12 +178,16 @@ class _MemoComposeBodyState extends State<_MemoComposeBody> {
                   child: FilledButton(
                     onPressed: _submit,
                     style: FilledButton.styleFrom(
-                      backgroundColor: isForest
-                          ? const Color(0xFF3A4A38)
-                          : const Color(0xFF8A5A30),
-                      foregroundColor: isForest
-                          ? const Color(0xFFE8DCC8)
-                          : const Color(0xFFF3E6C8),
+                      backgroundColor: switch (widget.theme) {
+                        MemoTheme.forest => const Color(0xFF3A4A38),
+                        MemoTheme.ocean => const Color(0xFF3A5460),
+                        MemoTheme.desert => const Color(0xFF8A5A30),
+                      },
+                      foregroundColor: switch (widget.theme) {
+                        MemoTheme.forest => const Color(0xFFE8DCC8),
+                        MemoTheme.ocean => const Color(0xFFE0ECF0),
+                        MemoTheme.desert => const Color(0xFFF3E6C8),
+                      },
                       padding: const EdgeInsets.symmetric(
                         horizontal: 18,
                         vertical: 12,

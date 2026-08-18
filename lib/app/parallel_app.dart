@@ -7,11 +7,15 @@ import '../memo/memo.dart';
 import '../presence/presence_service.dart';
 import '../scenes/desert/desert_scene.dart';
 import '../scenes/forest/forest_scene.dart';
+import '../scenes/ocean/ocean_scene.dart';
 import '../subscription/subscription_debug_sheet.dart';
+import '../subscription/subscription_gate.dart';
+import '../subscription/subscription_service.dart';
 import '../theme/desert_palette.dart';
 import '../theme/forest_palette.dart';
+import '../theme/ocean_palette.dart';
 
-enum _SceneKind { desert, forest }
+enum _SceneKind { desert, forest, ocean }
 
 class ParallelApp extends StatelessWidget {
   const ParallelApp({super.key});
@@ -40,26 +44,56 @@ class _ScenePicker extends StatefulWidget {
 
 class _ScenePickerState extends State<_ScenePicker>
     with WidgetsBindingObserver {
-  _SceneKind _kind = _SceneKind.forest;
+  /// Free tier starts in the desert; forest & ocean require Parallel Plus.
+  _SceneKind _kind = _SceneKind.desert;
   final AmbientMusic _audio = AmbientMusic();
   final PresenceService _presence = PresenceService();
+  final SubscriptionService _subscription = SubscriptionService.instance;
   bool _musicOn = false;
   int _presenceCount = 0;
   StreamSubscription<int>? _presenceSub;
 
-  AmbienceScene get _ambience =>
-      _kind == _SceneKind.forest ? AmbienceScene.forest : AmbienceScene.desert;
+  bool get _isPlus => _subscription.isSubscribed;
 
-  MemoTheme get _memoTheme =>
-      _kind == _SceneKind.forest ? MemoTheme.forest : MemoTheme.desert;
+  bool get _needsPlus =>
+      _kind == _SceneKind.forest || _kind == _SceneKind.ocean;
+
+  AmbienceScene get _ambience => switch (_kind) {
+    _SceneKind.desert => AmbienceScene.desert,
+    _SceneKind.forest => AmbienceScene.forest,
+    _SceneKind.ocean => AmbienceScene.ocean,
+  };
+
+  MemoTheme get _memoTheme => switch (_kind) {
+    _SceneKind.desert => MemoTheme.desert,
+    _SceneKind.forest => MemoTheme.forest,
+    _SceneKind.ocean => MemoTheme.ocean,
+  };
+
+  Color get _canvas => switch (_kind) {
+    _SceneKind.desert => DesertPalette.canvas,
+    _SceneKind.forest => ForestPalette.canvas,
+    _SceneKind.ocean => OceanPalette.canvas,
+  };
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _subscription.addListener(_onSubscriptionChanged);
     // Nature bed on by default; may be blocked until first gesture on some platforms.
     _startNature();
     unawaited(_joinPresence());
+  }
+
+  void _onSubscriptionChanged() {
+    if (!mounted) return;
+    // Drop back to desert if Plus lapses while on a premium scene.
+    if (!_isPlus && _needsPlus) {
+      unawaited(_selectScene(_SceneKind.desert));
+      return;
+    }
+    setState(() {});
   }
 
   Future<void> _startNature() async {
@@ -91,7 +125,25 @@ class _ScenePickerState extends State<_ScenePicker>
     );
   }
 
+  bool _isLocked(_SceneKind kind) =>
+      (kind == _SceneKind.forest || kind == _SceneKind.ocean) && !_isPlus;
+
+  String _gateReason(_SceneKind kind) => switch (kind) {
+    _SceneKind.forest => '숲은 Parallel Plus에서 함께 쉴 수 있어요.',
+    _SceneKind.ocean => '바다는 Parallel Plus에서 함께 쉴 수 있어요.',
+    _SceneKind.desert => '',
+  };
+
   Future<void> _selectScene(_SceneKind kind) async {
+    if (kind == _kind) return;
+    if (_isLocked(kind)) {
+      await showSubscriptionGate(
+        context,
+        reason: _gateReason(kind),
+      );
+      return;
+    }
+
     setState(() {
       _kind = kind;
       // Hide the number until the new theme's live count arrives.
@@ -99,14 +151,10 @@ class _ScenePickerState extends State<_ScenePicker>
     });
     _listenPresence();
     try {
-      await _presence.enter(
-        kind == _SceneKind.forest ? MemoTheme.forest : MemoTheme.desert,
-      );
+      await _presence.enter(_memoTheme);
     } catch (_) {}
     try {
-      await _audio.setScene(
-        kind == _SceneKind.forest ? AmbienceScene.forest : AmbienceScene.desert,
-      );
+      await _audio.setScene(_ambience);
     } catch (_) {}
   }
 
@@ -123,11 +171,99 @@ class _ScenePickerState extends State<_ScenePicker>
     }
   }
 
+  Future<void> _showNatureVolumeSheet() async {
+    final scene = _ambience;
+    final label = switch (_kind) {
+      _SceneKind.desert => '사막',
+      _SceneKind.forest => '숲',
+      _SceneKind.ocean => '바다',
+    };
+    var gain = _audio.natureGain(scene);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1C2228),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+            child: StatefulBuilder(
+              builder: (context, setSheet) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '자연 소리 · $label',
+                      style: TextStyle(
+                        fontFamily: 'Georgia',
+                        fontSize: 16,
+                        letterSpacing: 1.2,
+                        color: Colors.white.withValues(alpha: 0.92),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '이 테마에만 적용돼요',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white.withValues(alpha: 0.45),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.volume_mute_rounded,
+                          size: 18,
+                          color: Colors.white.withValues(alpha: 0.5),
+                        ),
+                        Expanded(
+                          child: SliderTheme(
+                            data: SliderTheme.of(context).copyWith(
+                              activeTrackColor: Colors.white.withValues(alpha: 0.85),
+                              inactiveTrackColor: Colors.white.withValues(alpha: 0.18),
+                              thumbColor: Colors.white,
+                              overlayColor: Colors.white.withValues(alpha: 0.12),
+                              trackHeight: 2.5,
+                            ),
+                            child: Slider(
+                              value: gain.clamp(0.0, 1.5),
+                              min: 0,
+                              max: 1.5,
+                              onChanged: (v) {
+                                setSheet(() => gain = v);
+                                unawaited(_audio.setNatureGain(scene, v));
+                              },
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.volume_up_rounded,
+                          size: 18,
+                          color: Colors.white.withValues(alpha: 0.5),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.resumed:
         unawaited(_joinPresence());
+        unawaited(_subscription.refreshCustomerInfo());
       case AppLifecycleState.inactive:
         break;
       case AppLifecycleState.paused:
@@ -140,25 +276,27 @@ class _ScenePickerState extends State<_ScenePicker>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _subscription.removeListener(_onSubscriptionChanged);
     _presenceSub?.cancel();
     unawaited(_presence.leave());
     _audio.dispose();
     super.dispose();
   }
 
+  Widget _sceneBody() => switch (_kind) {
+    _SceneKind.desert => DesertScene(presenceCount: _presenceCount),
+    _SceneKind.forest => ForestScene(presenceCount: _presenceCount),
+    _SceneKind.ocean => OceanScene(presenceCount: _presenceCount),
+  };
+
   @override
   Widget build(BuildContext context) {
-    final isForest = _kind == _SceneKind.forest;
     return Scaffold(
-      backgroundColor:
-          isForest ? ForestPalette.canvas : DesertPalette.canvas,
+      backgroundColor: _canvas,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          if (isForest)
-            ForestScene(presenceCount: _presenceCount)
-          else
-            DesertScene(presenceCount: _presenceCount),
+          _sceneBody(),
           SafeArea(
             child: Align(
               alignment: Alignment.bottomCenter,
@@ -176,17 +314,25 @@ class _ScenePickerState extends State<_ScenePicker>
                       children: [
                         _Chip(
                           label: '사막',
-                          selected: !isForest,
+                          selected: _kind == _SceneKind.desert,
                           onTap: () => _selectScene(_SceneKind.desert),
                         ),
                         _Chip(
                           label: '숲',
-                          selected: isForest,
+                          selected: _kind == _SceneKind.forest,
+                          locked: !_isPlus,
                           onTap: () => _selectScene(_SceneKind.forest),
+                        ),
+                        _Chip(
+                          label: '바다',
+                          selected: _kind == _SceneKind.ocean,
+                          locked: !_isPlus,
+                          onTap: () => _selectScene(_SceneKind.ocean),
                         ),
                         _MusicToggle(
                           on: _musicOn,
                           onTap: _toggleMusic,
+                          onLongPress: _showNatureVolumeSheet,
                         ),
                         // Temporary subscription test entry — remove later.
                         _DebugSubButton(
@@ -232,11 +378,13 @@ class _Chip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.locked = false,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final bool locked;
 
   @override
   Widget build(BuildContext context) {
@@ -252,17 +400,30 @@ class _Chip extends StatelessWidget {
               : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontFamily: 'Georgia',
-            fontSize: 14,
-            fontWeight: FontWeight.w400,
-            letterSpacing: 2,
-            color: selected
-                ? const Color(0xFF2A2A2A)
-                : Colors.white.withValues(alpha: 0.85),
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontFamily: 'Georgia',
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+                letterSpacing: 2,
+                color: selected
+                    ? const Color(0xFF2A2A2A)
+                    : Colors.white.withValues(alpha: locked ? 0.55 : 0.85),
+              ),
+            ),
+            if (locked) ...[
+              const SizedBox(width: 6),
+              Icon(
+                Icons.lock_outline_rounded,
+                size: 14,
+                color: Colors.white.withValues(alpha: 0.55),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -270,15 +431,21 @@ class _Chip extends StatelessWidget {
 }
 
 class _MusicToggle extends StatelessWidget {
-  const _MusicToggle({required this.on, required this.onTap});
+  const _MusicToggle({
+    required this.on,
+    required this.onTap,
+    this.onLongPress,
+  });
 
   final bool on;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),

@@ -10,6 +10,8 @@ abstract final class MemoBoardLayout {
     // Mid of the near sitting-sand lip (first ridge), a touch farther than feet.
     MemoTheme.desert => const Rect.fromLTWH(0.66, 0.70, 0.18, 0.12),
     MemoTheme.forest => const Rect.fromLTWH(0.72, 0.60, 0.12, 0.085),
+    // Driftwood board on the right of your sitting sand.
+    MemoTheme.ocean => const Rect.fromLTWH(0.70, 0.70, 0.16, 0.11),
   };
 
   /// Plank face; lower band of frame is posts in the ground.
