@@ -18,6 +18,8 @@ abstract final class MemoBoardPaint {
         _paintForestBoard(canvas, frame);
       case MemoTheme.ocean:
         _paintOceanBoard(canvas, frame);
+      case MemoTheme.space:
+        _paintSpaceBoard(canvas, frame);
     }
     canvas.restore();
   }
@@ -272,6 +274,82 @@ abstract final class MemoBoardPaint {
       canvas.drawCircle(
         Offset(face.left + face.width * nx, face.top + face.height * 0.2),
         math.max(1.0, w * 0.018),
+        nail,
+      );
+    }
+  }
+
+  static void _paintSpaceBoard(Canvas canvas, Rect frame) {
+    final w = frame.width;
+    final h = frame.height;
+    final face = _face(frame);
+
+    // Soft earth under the posts.
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(frame.center.dx, frame.bottom - h * 0.04),
+        width: w * 0.88,
+        height: h * 0.18,
+      ),
+      Paint()..color = const Color(0xFF100E0A),
+    );
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(frame.center.dx, frame.bottom - h * 0.015),
+        width: w * 0.55,
+        height: h * 0.08,
+      ),
+      Paint()..color = const Color(0xFF16140E),
+    );
+
+    final postW = w * 0.055;
+    final postTop = face.top + face.height * 0.12;
+    final postBottom = frame.bottom - h * 0.012;
+    for (final x in [frame.left + w * 0.17, frame.right - w * 0.17 - postW]) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTRB(x, postTop, x + postW, postBottom),
+          const Radius.circular(1),
+        ),
+        Paint()..color = const Color(0xFF16141C),
+      );
+    }
+
+    final board = RRect.fromRectAndRadius(face, const Radius.circular(2));
+    canvas.drawRRect(board, Paint()..color = const Color(0xFF080A10));
+    canvas.drawRRect(
+      board,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          face.topLeft,
+          face.bottomRight,
+          const [
+            Color(0xFF161820),
+            Color(0xFF101218),
+            Color(0xFF0A0C12),
+          ],
+          const [0.0, 0.5, 1.0],
+        ),
+    );
+
+    final grain = Paint()
+      ..color = const Color(0xFF2A303C)
+      ..strokeWidth = 0.8
+      ..style = PaintingStyle.stroke;
+    for (var i = 0; i < 2; i++) {
+      final y = face.top + face.height * (0.36 + i * 0.24);
+      canvas.drawLine(
+        Offset(face.left + face.width * 0.1, y),
+        Offset(face.right - face.width * 0.1, y),
+        grain,
+      );
+    }
+
+    final nail = Paint()..color = const Color(0xFF4A505C);
+    for (final nx in [0.14, 0.86]) {
+      canvas.drawCircle(
+        Offset(face.left + face.width * nx, face.top + face.height * 0.22),
+        math.max(1.0, w * 0.016),
         nail,
       );
     }

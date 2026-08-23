@@ -7,6 +7,8 @@ import 'memo.dart';
 import 'memo_reader.dart';
 import 'memo_service.dart';
 import 'memo_sticky_layout.dart';
+import '../welcome/welcome_host.dart';
+import '../welcome/welcome_panel_tip.dart';
 
 /// Large centered memo board — weathered theme frame; tap a scrap to zoom in.
 Future<void> showMemoPanel(
@@ -16,6 +18,8 @@ Future<void> showMemoPanel(
   required Future<void> Function() onCompose,
   bool canCompose = true,
   MemoService? service,
+  WelcomeHost? welcome,
+  Future<void> Function(Memo memo)? onMineOpened,
 }) {
   return showGeneralDialog<void>(
     context: context,
@@ -32,6 +36,8 @@ Future<void> showMemoPanel(
             onCompose: onCompose,
             canCompose: canCompose,
             service: service ?? MemoService(),
+            welcome: welcome,
+            onMineOpened: onMineOpened,
           ),
         ),
       );
@@ -65,6 +71,8 @@ class _MemoPanelBody extends StatefulWidget {
     required this.onCompose,
     required this.canCompose,
     required this.service,
+    this.welcome,
+    this.onMineOpened,
   });
 
   final MemoTheme theme;
@@ -72,6 +80,8 @@ class _MemoPanelBody extends StatefulWidget {
   final Future<void> Function() onCompose;
   final bool canCompose;
   final MemoService service;
+  final WelcomeHost? welcome;
+  final Future<void> Function(Memo memo)? onMineOpened;
 
   @override
   State<_MemoPanelBody> createState() => _MemoPanelBodyState();
@@ -89,21 +99,38 @@ class _MemoPanelBodyState extends State<_MemoPanelBody> {
       if (!mounted) return;
       setState(() => _memos = pool);
     });
+    widget.welcome?.addListener(_onWelcome);
+  }
+
+  void _onWelcome() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    widget.welcome?.removeListener(_onWelcome);
     _sub?.cancel();
     super.dispose();
   }
 
   Future<void> _openReader(Memo memo) async {
+    widget.welcome?.onReaderOpened();
+    if (memo.isOwnedBy(widget.service.currentUid) && memo.hasReply) {
+      await widget.onMineOpened?.call(memo);
+    }
     final updated = await showMemoReader(
       context,
       memo: memo,
       theme: widget.theme,
       service: widget.service,
+      welcome: widget.welcome,
     );
+    widget.welcome?.onReaderClosed();
+    if (updated != null &&
+        updated.isOwnedBy(widget.service.currentUid) &&
+        updated.hasReply) {
+      await widget.onMineOpened?.call(updated);
+    }
     if (updated == null || !mounted) return;
     setState(() {
       final i = _memos.indexWhere((m) => m.id == updated.id);
@@ -117,9 +144,12 @@ class _MemoPanelBodyState extends State<_MemoPanelBody> {
     final iconColor = switch (theme) {
       MemoTheme.forest => const Color(0xFFD0C4A8),
       MemoTheme.ocean => const Color(0xFFC8D8E0),
+      MemoTheme.space => const Color(0xFFC8D0E0),
       MemoTheme.desert => const Color(0xFF4A3018),
     };
     final size = MediaQuery.sizeOf(context);
+    final welcome = widget.welcome;
+    final guidingCompose = welcome?.step == WelcomeStep.compose;
 
     return Material(
       color: Colors.transparent,
@@ -151,6 +181,11 @@ class _MemoPanelBodyState extends State<_MemoPanelBody> {
                     ),
                   ],
                 ),
+                if (welcome != null && welcome.guidesPanel)
+                  WelcomePanelTip(
+                    host: welcome,
+                    hasMemos: _memos.isNotEmpty,
+                  ),
                 Expanded(
                   child: _memos.isEmpty
                       ? const SizedBox.expand()
@@ -178,23 +213,39 @@ class _MemoPanelBodyState extends State<_MemoPanelBody> {
                 ),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: IconButton(
-                    onPressed: () async {
-                      Navigator.of(context).maybePop();
-                      await widget.onCompose();
-                    },
-                    icon: Icon(
-                      widget.canCompose
-                          ? Icons.edit_note_rounded
-                          : Icons.lock_outline_rounded,
-                      color: iconColor.withValues(
-                        alpha: widget.canCompose ? 1 : 0.55,
+                  child: DecoratedBox(
+                    decoration: guidingCompose
+                        ? BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: iconColor.withValues(alpha: 0.7),
+                              width: 1.2,
+                            ),
+                          )
+                        : const BoxDecoration(),
+                    child: IconButton(
+                      onPressed: () async {
+                        if (guidingCompose) {
+                          // Just show that compose exists — don't end the tip.
+                          await widget.onCompose();
+                          return;
+                        }
+                        Navigator.of(context).maybePop();
+                        await widget.onCompose();
+                      },
+                      icon: Icon(
+                        widget.canCompose
+                            ? Icons.edit_note_rounded
+                            : Icons.lock_outline_rounded,
+                        color: iconColor.withValues(
+                          alpha: widget.canCompose ? 1 : 0.55,
+                        ),
+                        size: 28,
                       ),
-                      size: 28,
+                      tooltip: widget.canCompose
+                          ? '흔적 남기기'
+                          : '구독하면 남길 수 있어요',
                     ),
-                    tooltip: widget.canCompose
-                        ? '흔적 남기기'
-                        : '구독하면 남길 수 있어요',
                   ),
                 ),
               ],
@@ -236,6 +287,11 @@ class _WeatheredBoardPainter extends CustomPainter {
         Color(0xFF6A1414),
         Color(0xFF4A0E0E),
       ],
+      MemoTheme.space => const [
+        Color(0xFF2A3048),
+        Color(0xFF1A2038),
+        Color(0xFF12162A),
+      ],
       MemoTheme.desert => const [
         Color(0xFFD2A878),
         Color(0xFFB88858),
@@ -261,6 +317,7 @@ class _WeatheredBoardPainter extends CustomPainter {
         ..color = switch (theme) {
           MemoTheme.forest => const Color(0xFF243028),
           MemoTheme.ocean => const Color(0xFF5A1010),
+          MemoTheme.space => const Color(0xFF2A2840),
           MemoTheme.desert => const Color(0xFFC89860),
         },
     );
@@ -269,6 +326,7 @@ class _WeatheredBoardPainter extends CustomPainter {
       ..color = switch (theme) {
         MemoTheme.forest => const Color(0xFF3A4434),
         MemoTheme.ocean => const Color(0xFFA03030),
+        MemoTheme.space => const Color(0xFF5A6080),
         MemoTheme.desert => const Color(0xFFA87840),
       }
       ..strokeWidth = 1.1
@@ -276,6 +334,7 @@ class _WeatheredBoardPainter extends CustomPainter {
     final rng = math.Random(switch (theme) {
       MemoTheme.forest => 9,
       MemoTheme.ocean => 13,
+      MemoTheme.space => 17,
       MemoTheme.desert => 3,
     });
     for (var i = 0; i < 7; i++) {
@@ -299,6 +358,7 @@ class _WeatheredBoardPainter extends CustomPainter {
         ..color = switch (theme) {
           MemoTheme.forest => const Color(0xFF4A5A40),
           MemoTheme.ocean => const Color(0xFFB84848),
+          MemoTheme.space => const Color(0xFF6A7090),
           MemoTheme.desert => const Color(0xFF6A4018),
         }
         ..style = PaintingStyle.stroke
@@ -333,6 +393,7 @@ class _MemoScrap extends StatelessWidget {
         ? switch (theme) {
             MemoTheme.forest => const Color(0xFFF3E8C4),
             MemoTheme.ocean => const Color(0xFFF0E6D4),
+            MemoTheme.space => const Color(0xFFE8E4F0),
             MemoTheme.desert => const Color(0xFFFFF0C8),
           }
         : switch (theme) {
@@ -340,21 +401,22 @@ class _MemoScrap extends StatelessWidget {
               index.isEven ? const Color(0xFFE6D8B8) : const Color(0xFFDCCEAE),
             MemoTheme.ocean =>
               index.isEven ? const Color(0xFFE0E8EC) : const Color(0xFFD4DEE4),
+            MemoTheme.space =>
+              index.isEven ? const Color(0xFFD8DCE8) : const Color(0xFFC8CEDC),
             MemoTheme.desert =>
               index.isEven ? const Color(0xFFF0E0B8) : const Color(0xFFE6D4A8),
           };
     final ink = switch (theme) {
       MemoTheme.forest => const Color(0xFF2A3424),
       MemoTheme.ocean => const Color(0xFF1C3038),
+      MemoTheme.space => const Color(0xFF1C2438),
       MemoTheme.desert => const Color(0xFF4A2E14),
     };
     final mute = ink.withValues(alpha: 0.45);
     final rot = ((index % 5) - 2) * 0.035;
 
-    final lead = memo.hasSong ? memo.songLabel : memo.text.trim();
-    final preview = lead.isEmpty
-        ? '…'
-        : (lead.length > 48 ? '${lead.substring(0, 48)}…' : lead);
+    final body = memo.text.trim().isEmpty ? '…' : memo.text.trim();
+    final songLine = memo.hasSong ? '♪  ${memo.songLabel}' : null;
 
     return GestureDetector(
       onTap: onTap,
@@ -368,28 +430,28 @@ class _MemoScrap extends StatelessWidget {
               child: SizedBox.expand(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: FractionallySizedBox(
-                      widthFactor: 0.72,
-                      heightFactor: 0.55,
-                      alignment: Alignment.topLeft,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            memo.hasSong ? '♪' : '·',
-                            style: TextStyle(
-                              fontFamily: 'Georgia',
-                              fontSize: 13,
-                              color: mute,
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        right: 28,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '·',
+                              style: TextStyle(
+                                fontFamily: 'Georgia',
+                                fontSize: 13,
+                                color: mute,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 6),
-                          Expanded(
-                            child: Text(
-                              preview,
-                              maxLines: 4,
+                            const SizedBox(height: 6),
+                            Text(
+                              body,
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontFamily: 'Georgia',
@@ -398,10 +460,28 @@ class _MemoScrap extends StatelessWidget {
                                 color: ink,
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
+                      if (songLine != null)
+                        Positioned(
+                          right: 0,
+                          bottom: 0,
+                          left: 40,
+                          child: Text(
+                            songLine,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontFamily: 'Georgia',
+                              fontSize: 11,
+                              height: 1.2,
+                              color: mute,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -426,11 +506,11 @@ class _MemoScrap extends StatelessWidget {
                       size: base,
                       replies: shown,
                       seed: memo.id.hashCode ^ index,
-                      lowerBand: !memo.hasSong,
+                      lowerBand: true,
                       avoid: [
-                        const Rect.fromLTRB(0.04, 0.04, 0.62, 0.50),
+                        const Rect.fromLTRB(0.04, 0.04, 0.78, 0.42),
                         if (memo.hasSong)
-                          const Rect.fromLTRB(0.04, 0.48, 0.58, 0.76),
+                          const Rect.fromLTRB(0.28, 0.72, 0.96, 0.96),
                       ],
                     );
                     final badges = <Widget>[];

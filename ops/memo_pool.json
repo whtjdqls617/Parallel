@@ -1,0 +1,53 @@
+{
+  "_comment": "여기만 채우면 됩니다. text≤80자, artist/song≤40자. song·artist는 빈 문자열 OK.",
+  "entries": [
+    {
+      "theme": "desert",
+      "text": "오늘도 그냥 여기 앉아 있어요.",
+      "song": "",
+      "artist": ""
+    },
+    {
+      "theme": "desert",
+      "text": "바람이 좀 따뜻한 밤이에요.",
+      "song": "Lost Stars",
+      "artist": "Adam Levine"
+    },
+    {
+      "theme": "forest",
+      "text": "조용한 게 이렇게 필요할 줄 몰랐어요.",
+      "song": "",
+      "artist": ""
+    },
+    {
+      "theme": "forest",
+      "text": "괜찮다고 말하긴 어렵지만, 쉬고 있어요.",
+      "song": "",
+      "artist": ""
+    },
+    {
+      "theme": "ocean",
+      "text": "파도 소리만 듣고 가도 될 것 같아요.",
+      "song": "",
+      "artist": ""
+    },
+    {
+      "theme": "ocean",
+      "text": "잠시만 모래 위에 앉아 있을게요.",
+      "song": "",
+      "artist": ""
+    },
+    {
+      "theme": "space",
+      "text": "하늘이 넓어서 숨이 좀 트여요.",
+      "song": "",
+      "artist": ""
+    },
+    {
+      "theme": "space",
+      "text": "오늘 하루, 여기까지 온 것만으로도요.",
+      "song": "",
+      "artist": ""
+    }
+  ]
+}

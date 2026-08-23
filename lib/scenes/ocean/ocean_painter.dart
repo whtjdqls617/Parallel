@@ -1287,7 +1287,20 @@ class OceanPainter extends CustomPainter {
     final baseOpacity = 0.3 + breath * 0.08;
     final fontSize = size.shortestSide * 0.074;
     final hand = math.Random(sandCount * 31 + 7);
-    final anchor = Offset(size.width * 0.28, size.height * 0.8);
+    // Midway between the sea edge and the sandcastle.
+    final shoreY = size.height * 0.66;
+    final castleS = size.shortestSide * 0.08;
+    final castleBase = Offset(
+      size.width * 0.22,
+      shoreY + size.height * 0.145,
+    );
+    final castleTop = castleBase.dy - castleS * 1.42;
+    final seaEdge = _shoreEdgeY(castleBase.dx, size, shoreY);
+    final mid = (seaEdge + castleTop) * 0.5;
+    final anchor = Offset(
+      castleBase.dx,
+      ui.lerpDouble(mid, seaEdge, 0.35)!,
+    );
 
     canvas.save();
     canvas.translate(anchor.dx, anchor.dy);

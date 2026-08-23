@@ -8,10 +8,12 @@ import 'memo_board_layout.dart';
 import 'memo_board_paint.dart';
 import 'memo_compose_sheet.dart';
 import 'memo_panel.dart';
+import 'memo_reply_inbox.dart';
 import 'memo_reveal_controller.dart';
 import 'memo_service.dart';
 import '../subscription/subscription_gate.dart';
 import '../subscription/subscription_service.dart';
+import '../welcome/welcome_scope.dart';
 
 /// Overlay: planted board + up to three teaser notes. Tap opens center list.
 class MemoBoardLayer extends StatefulWidget {
@@ -34,6 +36,7 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
   StreamSubscription<List<Memo>>? _sub;
   String? _pendingPreferId;
   bool _submitting = false;
+  bool _hasUnreadReply = false;
 
   @override
   void initState() {
@@ -42,7 +45,22 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
     // Board teasers — up to three, revealed one by one from the front.
     _reveal = MemoRevealController(maxVisible: 3);
     _reveal.addListener(_onReveal);
+    unawaited(_bootInbox());
     _listen();
+  }
+
+  Future<void> _bootInbox() async {
+    await MemoReplyInbox.instance.ensureLoaded();
+    if (mounted) _refreshUnread();
+  }
+
+  void _refreshUnread() {
+    final next = MemoReplyInbox.instance.anyUnread(
+      _reveal.pool,
+      _service.currentUid,
+    );
+    if (next == _hasUnreadReply) return;
+    setState(() => _hasUnreadReply = next);
   }
 
   @override
@@ -52,7 +70,9 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
   }
 
   void _onReveal() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    _refreshUnread();
+    setState(() {});
   }
 
   void _listen() {
@@ -63,6 +83,7 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
       (pool) {
         _reveal.setPool(pool, preferId: _pendingPreferId);
         _pendingPreferId = null;
+        if (mounted) _refreshUnread();
       },
       onError: (e, st) => debugPrint('Memo watch failed: $e\n$st'),
     );
@@ -78,10 +99,12 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
 
   Future<void> _compose() async {
     if (_submitting) return;
-    if (!SubscriptionService.instance.isSubscribed) {
+    if (!SubscriptionService.instance.hasPlusAccess) {
       await showSubscriptionGate(
         context,
-        reason: '흔적을 남기려면 Parallel Plus가 필요해요. 읽기는 누구나 할 수 있어요.',
+        reason: SubscriptionService.instance.trialEnded
+            ? '체험이 끝났어요. 흔적을 남기려면 Parallel Plus가 필요해요. 읽기는 누구나 할 수 있어요.'
+            : '흔적을 남기려면 Parallel Plus가 필요해요. 읽기는 누구나 할 수 있어요.',
       );
       return;
     }
@@ -117,14 +140,26 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
   }
 
   Future<void> _openPanel() async {
-    await showMemoPanel(
-      context,
-      theme: widget.theme,
-      memos: _reveal.pool,
-      canCompose: SubscriptionService.instance.isSubscribed,
-      onCompose: _compose,
-      service: _service,
-    );
+    final welcome = WelcomeScope.maybeOf(context);
+    welcome?.onBoardOpened();
+    try {
+      await showMemoPanel(
+        context,
+        theme: widget.theme,
+        memos: _reveal.pool,
+        canCompose: SubscriptionService.instance.hasPlusAccess,
+        onCompose: _compose,
+        service: _service,
+        welcome: welcome,
+        onMineOpened: (memo) async {
+          await MemoReplyInbox.instance.markSeen(memo);
+          if (mounted) _refreshUnread();
+        },
+      );
+    } finally {
+      welcome?.onBoardClosed();
+      if (mounted) _refreshUnread();
+    }
   }
 
   @override
@@ -138,6 +173,7 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
 
         return Stack(
           fit: StackFit.expand,
+          clipBehavior: Clip.none,
           children: [
             CustomPaint(
               painter: _MemoPropPainter(theme: widget.theme),
@@ -174,7 +210,138 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
                   ],
                 ),
               ),
+            if (_hasUnreadReply)
+              Builder(
+                builder: (context) {
+                  // Don't clip to the (often narrow) board width — center above it.
+                  const cueH = 28.0;
+                  final maxW = math.min(
+                    sceneSize.width - 16,
+                    math.max(frame.width * 1.55, 96),
+                  );
+                  final left = (frame.center.dx - maxW / 2)
+                      .clamp(8.0, math.max(8.0, sceneSize.width - maxW - 8));
+                  final top = (frame.top - cueH - 4)
+                      .clamp(6.0, math.max(6.0, sceneSize.height - cueH - 6));
+                  return Positioned(
+                    left: left.toDouble(),
+                    top: top.toDouble(),
+                    width: maxW.toDouble(),
+                    height: cueH,
+                    child: IgnorePointer(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.center,
+                        child: _NewTraceCue(theme: widget.theme),
+                      ),
+                    ),
+                  );
+                },
+              ),
           ],
+        );
+      },
+    );
+  }
+}
+
+/// Soft cue above [MemoPlace] when a reply landed on one of my memos.
+class _NewTraceCue extends StatefulWidget {
+  const _NewTraceCue({required this.theme});
+
+  final MemoTheme theme;
+
+  @override
+  State<_NewTraceCue> createState() => _NewTraceCueState();
+}
+
+class _NewTraceCueState extends State<_NewTraceCue>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = switch (widget.theme) {
+      MemoTheme.forest => const Color(0xFFE8F0D8),
+      MemoTheme.ocean => const Color(0xFFE0F0F4),
+      MemoTheme.space => const Color(0xFFE8E4F4),
+      MemoTheme.desert => const Color(0xFFFFF4E0),
+    };
+    final glow = switch (widget.theme) {
+      MemoTheme.forest => const Color(0xFF9CF070),
+      MemoTheme.ocean => const Color(0xFFB8E8FF),
+      MemoTheme.space => const Color(0xFFE8E0D0),
+      MemoTheme.desert => const Color(0xFFFFD090),
+    };
+
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (context, _) {
+        final t = _pulse.value;
+        final labelColor = switch (widget.theme) {
+          MemoTheme.forest => const Color(0xFF3A4A28),
+          MemoTheme.ocean => const Color(0xFF1C3038),
+          MemoTheme.space => const Color(0xFF2A2840),
+          MemoTheme.desert => const Color(0xFF6A4018),
+        };
+        return Container(
+          padding: const EdgeInsets.fromLTRB(7, 4, 9, 4),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            color: ink.withValues(alpha: 0.94),
+            border: Border.all(
+              color: glow.withValues(alpha: 0.35 + 0.3 * t),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: glow.withValues(alpha: 0.2 + 0.16 * t),
+                blurRadius: 8 + 4 * t,
+                offset: const Offset(0, 2),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.18),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.auto_awesome_rounded,
+                size: 12,
+                color: labelColor.withValues(alpha: 0.88),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '새 흔적',
+                style: TextStyle(
+                  fontFamily: 'Georgia',
+                  fontSize: 10.5,
+                  letterSpacing: 0.3,
+                  height: 1,
+                  color: labelColor.withValues(alpha: 0.9),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -260,6 +427,7 @@ class _TeaserNoteState extends State<_TeaserNote>
         ? switch (widget.theme) {
             MemoTheme.forest => const Color(0xFFF3E8C4),
             MemoTheme.ocean => const Color(0xFFF0E6D4),
+            MemoTheme.space => const Color(0xFFE8E4F0),
             MemoTheme.desert => const Color(0xFFFFF0C8),
           }
         : switch (widget.theme) {
@@ -267,6 +435,8 @@ class _TeaserNoteState extends State<_TeaserNote>
               slot.isEven ? const Color(0xFFD2C6A8) : const Color(0xFFC8B898),
             MemoTheme.ocean =>
               slot.isEven ? const Color(0xFFD0DCE0) : const Color(0xFFC4D0D6),
+            MemoTheme.space =>
+              slot.isEven ? const Color(0xFFD8DCE8) : const Color(0xFFC8CEDC),
             MemoTheme.desert =>
               slot.isEven ? const Color(0xFFE2D0A8) : const Color(0xFFD8C498),
           };

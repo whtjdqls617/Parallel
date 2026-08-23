@@ -12,6 +12,8 @@ abstract final class MemoBoardLayout {
     MemoTheme.forest => const Rect.fromLTWH(0.72, 0.60, 0.12, 0.085),
     // Driftwood board on the right of your sitting sand.
     MemoTheme.ocean => const Rect.fromLTWH(0.70, 0.70, 0.16, 0.11),
+    // Small board on the near grass — left side.
+    MemoTheme.space => const Rect.fromLTWH(0.14, 0.76, 0.14, 0.09),
   };
 
   /// Plank face; lower band of frame is posts in the ground.

@@ -90,11 +90,13 @@ class _MemoComposeBodyState extends State<_MemoComposeBody> {
     final surface = switch (widget.theme) {
       MemoTheme.forest => const Color(0xFF1A2820),
       MemoTheme.ocean => const Color(0xFF1A2830),
+      MemoTheme.space => const Color(0xFF12182A),
       MemoTheme.desert => const Color(0xFFE8C898),
     };
     final ink = switch (widget.theme) {
       MemoTheme.forest => const Color(0xFFE8DCC8),
       MemoTheme.ocean => const Color(0xFFD8E4E8),
+      MemoTheme.space => const Color(0xFFD8DCE8),
       MemoTheme.desert => const Color(0xFF4A3018),
     };
     final hint = ink.withValues(alpha: 0.4);
@@ -181,11 +183,13 @@ class _MemoComposeBodyState extends State<_MemoComposeBody> {
                       backgroundColor: switch (widget.theme) {
                         MemoTheme.forest => const Color(0xFF3A4A38),
                         MemoTheme.ocean => const Color(0xFF3A5460),
+                        MemoTheme.space => const Color(0xFF3A4860),
                         MemoTheme.desert => const Color(0xFF8A5A30),
                       },
                       foregroundColor: switch (widget.theme) {
                         MemoTheme.forest => const Color(0xFFE8DCC8),
                         MemoTheme.ocean => const Color(0xFFE0ECF0),
+                        MemoTheme.space => const Color(0xFFE0E4F0),
                         MemoTheme.desert => const Color(0xFFF3E6C8),
                       },
                       padding: const EdgeInsets.symmetric(

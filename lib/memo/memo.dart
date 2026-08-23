@@ -1,4 +1,4 @@
-enum MemoTheme { desert, forest, ocean }
+enum MemoTheme { desert, forest, ocean, space }
 
 class MemoReply {
   const MemoReply({
@@ -116,6 +116,7 @@ class Memo {
     'desert' => MemoTheme.desert,
     'forest' => MemoTheme.forest,
     'ocean' => MemoTheme.ocean,
+    'space' => MemoTheme.space,
     _ => null,
   };
 }
@@ -125,10 +126,14 @@ extension MemoThemeX on MemoTheme {
     MemoTheme.desert => 'desert',
     MemoTheme.forest => 'forest',
     MemoTheme.ocean => 'ocean',
+    MemoTheme.space => 'space',
   };
 
   /// Cool / dark themes share night-letter treatment in memo UI.
-  bool get isCool => this == MemoTheme.forest || this == MemoTheme.ocean;
+  bool get isCool =>
+      this == MemoTheme.forest ||
+      this == MemoTheme.ocean ||
+      this == MemoTheme.space;
 }
 
 /// Result of the unified compose sheet.

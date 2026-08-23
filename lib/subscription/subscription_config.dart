@@ -18,4 +18,7 @@ class SubscriptionConfig {
 
   /// App Store Connect / RevenueCat product id.
   static const monthlyProductId = 'parallel_plus_monthly';
+
+  /// Full Parallel Plus access from first open, before paywall.
+  static const trialDuration = Duration(days: 7);
 }

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../subscription/subscription_gate.dart';
 import '../subscription/subscription_service.dart';
+import '../welcome/welcome_host.dart';
+import '../welcome/welcome_panel_tip.dart';
 import 'memo.dart';
 import 'memo_reply_place_sheet.dart';
 import 'memo_reply_sheet.dart';
@@ -16,6 +18,7 @@ Future<Memo?> showMemoReader(
   required Memo memo,
   required MemoTheme theme,
   MemoService? service,
+  WelcomeHost? welcome,
 }) {
   return showGeneralDialog<Memo>(
     context: context,
@@ -30,6 +33,7 @@ Future<Memo?> showMemoReader(
             memo: memo,
             theme: theme,
             service: service ?? MemoService(),
+            welcome: welcome,
           ),
         ),
       );
@@ -61,11 +65,13 @@ class _MemoReaderLetter extends StatefulWidget {
     required this.memo,
     required this.theme,
     required this.service,
+    this.welcome,
   });
 
   final Memo memo;
   final MemoTheme theme;
   final MemoService service;
+  final WelcomeHost? welcome;
 
   @override
   State<_MemoReaderLetter> createState() => _MemoReaderLetterState();
@@ -87,10 +93,12 @@ class _MemoReaderLetterState extends State<_MemoReaderLetter> {
 
   Future<void> _reply() async {
     if (!_canReply) return;
-    if (!SubscriptionService.instance.isSubscribed) {
+    if (!SubscriptionService.instance.hasPlusAccess) {
       await showSubscriptionGate(
         context,
-        reason: '답장을 남기려면 Parallel Plus가 필요해요.',
+        reason: SubscriptionService.instance.trialEnded
+            ? '체험이 끝났어요. 답장을 남기려면 Parallel Plus가 필요해요.'
+            : '답장을 남기려면 Parallel Plus가 필요해요.',
       );
       return;
     }
@@ -331,51 +339,75 @@ class _MemoReaderLetterState extends State<_MemoReaderLetter> {
     final theme = widget.theme;
     final isForest = theme == MemoTheme.forest;
     final isOcean = theme == MemoTheme.ocean;
+    final isSpace = theme == MemoTheme.space;
     final isMine = _memo.isOwnedBy(widget.service.currentUid);
     final paper = isMine
-        ? (isOcean
-            ? const Color(0xFFF2EAD8)
-            : isForest
-                ? const Color(0xFFF2EAC8)
-                : const Color(0xFFFFF4D8))
-        : (isOcean
-            ? const Color(0xFFE4ECF0)
-            : isForest
-                ? const Color(0xFFE4E8D8)
-                : const Color(0xFFF8EBD4));
+        ? (isSpace
+            ? const Color(0xFFECE8F4)
+            : isOcean
+                ? const Color(0xFFF2EAD8)
+                : isForest
+                    ? const Color(0xFFF2EAC8)
+                    : const Color(0xFFFFF4D8))
+        : (isSpace
+            ? const Color(0xFFDCE0EC)
+            : isOcean
+                ? const Color(0xFFE4ECF0)
+                : isForest
+                    ? const Color(0xFFE4E8D8)
+                    : const Color(0xFFF8EBD4));
     final nest = isMine
-        ? (isOcean
-            ? const Color(0xFFF8F2E6)
+        ? (isSpace
+            ? const Color(0xFFF4F2FA)
+            : isOcean
+                ? const Color(0xFFF8F2E6)
+                : isForest
+                    ? const Color(0xFFF6F0DC)
+                    : const Color(0xFFFFFAEC))
+        : (isSpace
+            ? const Color(0xFFE8ECF4)
+            : isOcean
+                ? const Color(0xFFEEF4F6)
+                : isForest
+                    ? const Color(0xFFEEF2E4)
+                    : const Color(0xFFFFF6E6));
+    final songNest = isSpace
+        ? const Color(0xFFC8D0E4)
+        : isOcean
+            ? const Color(0xFFD4E0E6)
             : isForest
-                ? const Color(0xFFF6F0DC)
-                : const Color(0xFFFFFAEC))
-        : (isOcean
-            ? const Color(0xFFEEF4F6)
+                ? const Color(0xFFDCE4D0)
+                : const Color(0xFFF2E0C0);
+    final ink = isSpace
+        ? const Color(0xFF1C2438)
+        : isOcean
+            ? const Color(0xFF1C3038)
             : isForest
-                ? const Color(0xFFEEF2E4)
-                : const Color(0xFFFFF6E6));
-    final songNest = isOcean
-        ? const Color(0xFFD4E0E6)
-        : isForest
-            ? const Color(0xFFDCE4D0)
-            : const Color(0xFFF2E0C0);
-    final ink = isOcean
-        ? const Color(0xFF1C3038)
-        : isForest
-            ? const Color(0xFF243428)
-            : const Color(0xFF5A3A20);
-    final tilt = isOcean ? -0.01 : isForest ? 0.014 : -0.022;
+                ? const Color(0xFF243428)
+                : const Color(0xFF5A3A20);
+    final tilt = isSpace
+        ? -0.008
+        : isOcean
+            ? -0.01
+            : isForest
+                ? 0.014
+                : -0.022;
     final size = MediaQuery.sizeOf(context);
     return Material(
       color: Colors.transparent,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          minWidth: size.width * 0.72,
-          maxWidth: size.width * 0.86,
-          minHeight: size.height * 0.52,
-          maxHeight: size.height * 0.78,
-        ),
-        child: AspectRatio(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.welcome?.step == WelcomeStep.read)
+            const WelcomeReaderTip(),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: size.width * 0.72,
+              maxWidth: size.width * 0.86,
+              minHeight: size.height * 0.52,
+              maxHeight: size.height * 0.78,
+            ),
+            child: AspectRatio(
           aspectRatio: 0.68,
           child: Transform.rotate(
             angle: tilt,
@@ -386,7 +418,7 @@ class _MemoReaderLetterState extends State<_MemoReaderLetter> {
                   child: _TornPaper(
                     theme: theme,
                     paper: paper,
-                    seed: isOcean ? 23 : isForest ? 19 : 11,
+                    seed: isSpace ? 27 : isOcean ? 23 : isForest ? 19 : 11,
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(24, 22, 20, 24),
                       child: Column(
@@ -398,7 +430,7 @@ class _MemoReaderLetterState extends State<_MemoReaderLetter> {
                               children: [
                                 Expanded(
                                   child: Text(
-                                    '누군가의 흔적',
+                                    '누군가의 마음',
                                     style: TextStyle(
                                       fontFamily: 'Georgia',
                                       fontSize: 12,
@@ -456,7 +488,7 @@ class _MemoReaderLetterState extends State<_MemoReaderLetter> {
                             child: _TornNest(
                               theme: theme,
                               color: nest,
-                              seed: isOcean ? 31 : isForest ? 29 : 21,
+                              seed: isSpace ? 33 : isOcean ? 31 : isForest ? 29 : 21,
                               child: Padding(
                                 padding:
                                     const EdgeInsets.fromLTRB(22, 20, 22, 20),
@@ -482,7 +514,7 @@ class _MemoReaderLetterState extends State<_MemoReaderLetter> {
                               child: _TornNest(
                                 theme: theme,
                                 color: songNest,
-                                seed: isOcean ? 43 : isForest ? 41 : 37,
+                                seed: isSpace ? 47 : isOcean ? 43 : isForest ? 41 : 37,
                                 child: Padding(
                                   padding:
                                       const EdgeInsets.fromLTRB(22, 16, 22, 16),
@@ -645,6 +677,8 @@ class _MemoReaderLetterState extends State<_MemoReaderLetter> {
             ),
           ),
         ),
+          ),
+        ],
       ),
     );
   }
@@ -658,16 +692,19 @@ Future<bool?> _confirmDeleteReply(
   final surface = switch (theme) {
     MemoTheme.forest => const Color(0xFF1A2820),
     MemoTheme.ocean => const Color(0xFF1A2830),
+    MemoTheme.space => const Color(0xFF12182A),
     MemoTheme.desert => const Color(0xFFE8C898),
   };
   final ink = switch (theme) {
     MemoTheme.forest => const Color(0xFFE8DCC8),
     MemoTheme.ocean => const Color(0xFFD8E4E8),
+    MemoTheme.space => const Color(0xFFD8DCE8),
     MemoTheme.desert => const Color(0xFF4A3018),
   };
   final accent = switch (theme) {
     MemoTheme.forest => const Color(0xFF3A4A38),
     MemoTheme.ocean => const Color(0xFF3A5460),
+    MemoTheme.space => const Color(0xFF3A4860),
     MemoTheme.desert => const Color(0xFF8A5A30),
   };
   final accentInk = cool
@@ -1078,9 +1115,11 @@ class _TornSheetPainter extends CustomPainter {
     final cool = theme.isCool;
     final rim = Paint()
       ..color = cool
-          ? (theme == MemoTheme.ocean
-              ? const Color(0x66507080)
-              : const Color(0x665A6A50))
+          ? (theme == MemoTheme.space
+              ? const Color(0x66587098)
+              : theme == MemoTheme.ocean
+                  ? const Color(0x66507080)
+                  : const Color(0x665A6A50))
           : const Color(0x668A6030)
       ..style = PaintingStyle.stroke
       ..strokeWidth = recessed ? 0.8 : 1.1;

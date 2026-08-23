@@ -42,6 +42,7 @@ dependencies:
   purchases_flutter: ^10.8.0
   purchases_ui_flutter: ^10.8.0
   shared_preferences: ^2.5.5
+  firebase_messaging: ^16.5.0
 
 dev_dependencies:
   flutter_test:

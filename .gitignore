@@ -51,6 +51,11 @@ app.*.map.json
 key.properties
 **/*.keystore
 **/*.jks
+ops/serviceAccount.json
+ops/*firebase-adminsdk*.json
+ops/node_modules/
+ops/.venv/
+functions/node_modules/
 
 # Firebase client configs (contain API keys — keep local / CI secret)
 **/google-services.json

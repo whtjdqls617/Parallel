@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -5,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'app/parallel_app.dart';
 import 'audio/ambient_music.dart';
 import 'firebase_options.dart';
+import 'notify/push_service.dart';
 import 'subscription/subscription_service.dart';
 
 Future<void> main() async {
@@ -19,6 +22,8 @@ Future<void> main() async {
   await SubscriptionService.instance.start(
     firebaseUid: FirebaseAuth.instance.currentUser?.uid,
   );
+  // Reply push — needs permission; best-effort.
+  unawaited(PushService.instance.start());
   // Don't pause Spotify / other apps when our nature bed starts.
   await AmbientMusic.ensureMixWithOthers();
   runApp(const ParallelApp());

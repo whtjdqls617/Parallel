@@ -1,0 +1,16 @@
+{
+  "name": "parallel-ops",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "admin": "python3 admin_server.py",
+    "admin:venv": ".venv/bin/python admin_server.py",
+    "admin:node": "node admin_server.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.4.0"
+  }
+}

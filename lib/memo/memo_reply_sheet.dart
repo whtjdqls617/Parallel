@@ -109,11 +109,13 @@ class _MemoReplyBodyState extends State<_MemoReplyBody> {
     final surface = switch (widget.theme) {
       MemoTheme.forest => const Color(0xFF1A2820),
       MemoTheme.ocean => const Color(0xFF1A2830),
+      MemoTheme.space => const Color(0xFF12182A),
       MemoTheme.desert => const Color(0xFFE8C898),
     };
     final ink = switch (widget.theme) {
       MemoTheme.forest => const Color(0xFFE8DCC8),
       MemoTheme.ocean => const Color(0xFFD8E4E8),
+      MemoTheme.space => const Color(0xFFD8DCE8),
       MemoTheme.desert => const Color(0xFF4A3018),
     };
     final hint = ink.withValues(alpha: 0.4);

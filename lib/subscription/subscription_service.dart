@@ -1,6 +1,10 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'subscription_config.dart';
 import 'subscription_keys.dart';
@@ -11,13 +15,15 @@ class PurchaseAttempt {
   final String message;
 }
 
-/// RevenueCat subscription state for Parallel Plus.
+/// RevenueCat subscription + local/cloud 7-day Plus trial.
 ///
 /// Call [start] once after Firebase Auth has a uid. Feature gates use
-/// [isSubscribed] (forest/ocean scenes + memo compose).
+/// [hasPlusAccess] (subscribed **or** still in trial).
 class SubscriptionService extends ChangeNotifier {
   SubscriptionService._();
   static final SubscriptionService instance = SubscriptionService._();
+
+  static const _prefsTrialKey = 'plus_trial_started_ms';
 
   bool _configured = false;
   bool _subscribed = false;
@@ -26,8 +32,50 @@ class SubscriptionService extends ChangeNotifier {
   String? _lastOfferingsNote;
   List<StoreProduct> _directProducts = const [];
 
+  DateTime? _trialStartedAt;
+  Timer? _trialEndTimer;
+  String? _firebaseUid;
+
   bool get isConfigured => _configured;
+
+  /// Paying entitlement only (RevenueCat).
   bool get isSubscribed => _subscribed;
+
+  /// Feature unlock: active sub **or** within the first-week trial.
+  bool get hasPlusAccess => _subscribed || isInTrial;
+
+  bool get isInTrial {
+    if (_subscribed) return false;
+    final start = _trialStartedAt;
+    if (start == null) return false;
+    final end = start.add(SubscriptionConfig.trialDuration);
+    return DateTime.now().isBefore(end);
+  }
+
+  bool get trialEnded {
+    if (_subscribed) return false;
+    final start = _trialStartedAt;
+    if (start == null) return false;
+    return !isInTrial;
+  }
+
+  DateTime? get trialStartedAt => _trialStartedAt;
+
+  DateTime? get trialEndsAt {
+    final start = _trialStartedAt;
+    if (start == null) return null;
+    return start.add(SubscriptionConfig.trialDuration);
+  }
+
+  /// Whole days left (0 when last day or expired).
+  int get trialDaysLeft {
+    final end = trialEndsAt;
+    if (end == null || _subscribed) return 0;
+    final left = end.difference(DateTime.now());
+    if (left.isNegative) return 0;
+    return left.inDays;
+  }
+
   CustomerInfo? get customerInfo => _customerInfo;
   Offerings? get offerings => _offerings;
   String? get lastOfferingsNote => _lastOfferingsNote;
@@ -53,14 +101,22 @@ class SubscriptionService extends ChangeNotifier {
     final currentId = _offerings?.current?.identifier ?? '(none)';
     final offeringId = offering?.identifier ?? '(none)';
     final direct = _directProducts.map((p) => p.identifier).join(', ');
+    final trial = _trialStartedAt == null
+        ? 'trial=unset'
+        : 'trial=${isInTrial ? 'active' : 'ended'} '
+            'daysLeft=$trialDaysLeft start=$_trialStartedAt';
     return 'current=$currentId offering=$offeringId '
         'availablePackages=$available '
-        'direct=[${direct.isEmpty ? 'empty' : direct}]'
+        'direct=[${direct.isEmpty ? 'empty' : direct}] '
+        '$trial'
         '${_lastOfferingsNote == null ? '' : ' note=$_lastOfferingsNote'}';
   }
 
-  /// Configure SDK + bind Firebase uid. No-ops if API keys are missing.
+  /// Configure SDK + bind Firebase uid + ensure trial clock.
   Future<void> start({String? firebaseUid}) async {
+    _firebaseUid = firebaseUid;
+    await _ensureTrialStarted(firebaseUid: firebaseUid);
+
     if (_configured) {
       if (firebaseUid != null && firebaseUid.isNotEmpty) {
         await linkFirebaseUser(firebaseUid);
@@ -103,6 +159,7 @@ class SubscriptionService extends ChangeNotifier {
 
   /// Keep RevenueCat appUserID == Firebase Auth uid.
   Future<void> linkFirebaseUser(String uid) async {
+    _firebaseUid = uid;
     if (!_configured || uid.isEmpty) return;
     try {
       final result = await Purchases.logIn(uid);
@@ -110,6 +167,8 @@ class SubscriptionService extends ChangeNotifier {
     } catch (e) {
       debugPrint('[Subscription] logIn failed: $e');
     }
+    // Prefer cloud trial start if prefs were wiped but uid persisted.
+    await _ensureTrialStarted(firebaseUid: uid);
   }
 
   Future<void> refreshCustomerInfo() async {
@@ -163,7 +222,6 @@ class SubscriptionService extends ChangeNotifier {
       return _purchase(() => Purchases.purchase(PurchaseParams.package(package)));
     }
 
-    // Fallback: buy by product id when offering packages didn't hydrate.
     if (_directProducts.isEmpty) {
       await refreshOfferings();
     }
@@ -197,6 +255,18 @@ class SubscriptionService extends ChangeNotifier {
     } catch (e) {
       return PurchaseAttempt(ok: false, message: _errorMessage(e));
     }
+  }
+
+  /// Debug — pretend the trial already ended.
+  Future<void> debugEndTrial() async {
+    final ended = DateTime.now().subtract(SubscriptionConfig.trialDuration +
+        const Duration(hours: 1));
+    await _setTrialStarted(ended);
+  }
+
+  /// Debug — restart a fresh 7-day trial from now.
+  Future<void> debugRestartTrial() async {
+    await _setTrialStarted(DateTime.now());
   }
 
   Future<PurchaseAttempt> _purchase(
@@ -236,8 +306,84 @@ class SubscriptionService extends ChangeNotifier {
         info.entitlements.active.containsKey(SubscriptionConfig.entitlementId);
     if (next != _subscribed || _customerInfo != null) {
       _subscribed = next;
+      _scheduleTrialEndNotify();
       notifyListeners();
     }
+  }
+
+  Future<void> _ensureTrialStarted({String? firebaseUid}) async {
+    DateTime? local;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final ms = prefs.getInt(_prefsTrialKey);
+      if (ms != null) local = DateTime.fromMillisecondsSinceEpoch(ms);
+    } catch (_) {}
+
+    DateTime? cloud;
+    final uid = firebaseUid ?? _firebaseUid;
+    if (uid != null && uid.isNotEmpty) {
+      try {
+        final snap =
+            await FirebaseFirestore.instance.collection('users').doc(uid).get();
+        final raw = snap.data()?['plusTrialStartedAt'];
+        if (raw is Timestamp) cloud = raw.toDate();
+      } catch (e) {
+        debugPrint('[Subscription] trial cloud read failed: $e');
+      }
+    }
+
+    // Earliest known start wins (prevents reinstall/prefs wipe from extending).
+    DateTime? start;
+    if (local != null && cloud != null) {
+      start = local.isBefore(cloud) ? local : cloud;
+    } else {
+      start = local ?? cloud;
+    }
+    start ??= DateTime.now();
+
+    await _setTrialStarted(start, notify: false);
+  }
+
+  Future<void> _setTrialStarted(DateTime start, {bool notify = true}) async {
+    _trialStartedAt = start;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_prefsTrialKey, start.millisecondsSinceEpoch);
+    } catch (_) {}
+
+    final uid = _firebaseUid;
+    if (uid != null && uid.isNotEmpty) {
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(uid).set(
+          {
+            'plusTrialStartedAt': Timestamp.fromDate(start),
+            'uid': uid,
+          },
+          SetOptions(merge: true),
+        );
+      } catch (e) {
+        debugPrint('[Subscription] trial cloud write failed: $e');
+      }
+    }
+
+    _scheduleTrialEndNotify();
+    if (notify) notifyListeners();
+  }
+
+  void _scheduleTrialEndNotify() {
+    _trialEndTimer?.cancel();
+    if (_subscribed || !isInTrial) return;
+    final end = trialEndsAt;
+    if (end == null) return;
+    var left = end.difference(DateTime.now());
+    if (left.isNegative) left = Duration.zero;
+    // Timer max ~practical; clamp to avoid huge delays issues.
+    if (left > const Duration(days: 8)) {
+      left = const Duration(days: 8);
+    }
+    _trialEndTimer = Timer(left, () {
+      notifyListeners();
+    });
   }
 
   String? _platformApiKey() {

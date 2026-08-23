@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import 'memo.dart';
 
@@ -21,6 +22,22 @@ class MemoService {
       _db.collection(_collection);
 
   String? get currentUid => _auth.currentUser?.uid;
+
+  /// Single memo by id (for push deep-link). Null if missing / invalid.
+  Future<Memo?> fetchById(String id) async {
+    final trimmed = id.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      final snap = await _memos.doc(trimmed).get();
+      if (!snap.exists) return null;
+      final data = snap.data();
+      if (data == null) return null;
+      return _fromData(snap.id, data);
+    } catch (e) {
+      debugPrint('Memo fetchById failed: $e');
+      return null;
+    }
+  }
 
   Stream<List<Memo>> watchPool(MemoTheme theme) {
     return _memos

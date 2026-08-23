@@ -84,22 +84,30 @@ class _ReplyPlaceBodyState extends State<_ReplyPlaceBody> {
     final paperW = math.min(size.width * 0.88, 420.0);
     final paperH = paperW / 0.68;
     final ink = cool
-        ? (theme == MemoTheme.ocean
-            ? const Color(0xFFD8E4E8)
-            : const Color(0xFFE8DCC8))
+        ? (theme == MemoTheme.space
+            ? const Color(0xFFD8DCE8)
+            : theme == MemoTheme.ocean
+                ? const Color(0xFFD8E4E8)
+                : const Color(0xFFE8DCC8))
         : const Color(0xFF4A3018);
     final board = cool
-        ? (theme == MemoTheme.ocean
-            ? const Color(0xFF1A2830)
-            : const Color(0xFF1A2820))
+        ? (theme == MemoTheme.space
+            ? const Color(0xFF12182A)
+            : theme == MemoTheme.ocean
+                ? const Color(0xFF1A2830)
+                : const Color(0xFF1A2820))
         : const Color(0xFFE8C898);
     final letter = cool
-        ? (theme == MemoTheme.ocean
-            ? const Color(0xFFE4ECF0)
-            : const Color(0xFFE4E8D8))
+        ? (theme == MemoTheme.space
+            ? const Color(0xFFDCE0EC)
+            : theme == MemoTheme.ocean
+                ? const Color(0xFFE4ECF0)
+                : const Color(0xFFE4E8D8))
         : const Color(0xFFF8EBD4);
     final nestInk = cool
-        ? const Color(0xFF1C3038)
+        ? (theme == MemoTheme.space
+            ? const Color(0xFF1C2438)
+            : const Color(0xFF1C3038))
         : const Color(0xFF5A3A20);
 
     return Material(
@@ -159,7 +167,7 @@ class _ReplyPlaceBodyState extends State<_ReplyPlaceBody> {
                                       CrossAxisAlignment.stretch,
                                   children: [
                                     Text(
-                                      '누군가의 흔적',
+                                      '누군가의 마음',
                                       style: TextStyle(
                                         fontFamily: 'Georgia',
                                         fontSize: 11,

@@ -99,7 +99,7 @@ class _SubscriptionGateSheetState extends State<_SubscriptionGateSheet> {
             ),
             const SizedBox(height: 10),
             const Text(
-              '숲 · 바다 · 흔적 남기기',
+              '숲 · 바다 · 별 · 흔적 남기기',
               style: TextStyle(
                 color: Colors.white54,
                 fontFamily: 'Georgia',

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Parallel 관리</title>
+  <style>
+    :root {
+      --bg: #1a1714;
+      --panel: #26211c;
+      --line: #3d342c;
+      --text: #f3ebe2;
+      --muted: #a89888;
+      --accent: #d4a574;
+      --ok: #8fbc8f;
+      --err: #e08a7a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      background:
+        radial-gradient(ellipse at top, #2a231c 0%, var(--bg) 55%);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px 16px 48px;
+    }
+    main {
+      max-width: 880px;
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }
+    h1 {
+      margin: 0;
+      font-weight: 600;
+      font-size: 1.35rem;
+      letter-spacing: -0.02em;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 4px;
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px 16px 14px;
+    }
+    section h2 {
+      margin: 0 0 12px;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+    .row {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 640px) {
+      .row.cols-2 { grid-template-columns: 1fr 1fr; }
+      .row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+    }
+    label {
+      display: grid;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    input, select, textarea, button {
+      font: inherit;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #1c1814;
+      color: var(--text);
+      padding: 10px 12px;
+    }
+    textarea { min-height: 72px; resize: vertical; }
+    button {
+      cursor: pointer;
+      background: var(--accent);
+      color: #1a120c;
+      border: none;
+      font-weight: 600;
+      padding: 11px 14px;
+    }
+    button.secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--line);
+      font-weight: 500;
+    }
+    button:disabled { opacity: 0.55; cursor: wait; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+    .msg {
+      margin-top: 10px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      white-space: pre-wrap;
+    }
+    .msg.ok { color: var(--ok); }
+    .msg.err { color: var(--err); }
+    .filters {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+    .filters select { min-width: 140px; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 8px 6px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 500; font-size: 0.75rem; }
+    .id {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.75rem;
+      word-break: break-all;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: #3a3028;
+      color: var(--muted);
+      font-size: 0.72rem;
+    }
+    .badge.warn { color: #f0c090; background: #3a2c1c; }
+    .pick {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid #6a4e34;
+      padding: 6px 8px;
+      font-size: 0.78rem;
+    }
+    .empty { color: var(--muted); padding: 12px 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Parallel 관리</h1>
+      <p class="sub">로컬 전용 · 글 올리기 / 위로 답장 · 이 탭만 쓰면 됩니다</p>
+    </header>
+
+    <section>
+      <h2>글 올리기</h2>
+      <div class="row cols-3">
+        <label>테마
+          <select id="post-theme">
+            <option value="desert">desert (사막)</option>
+            <option value="forest">forest (숲)</option>
+            <option value="ocean">ocean (바다)</option>
+            <option value="space">space (별)</option>
+          </select>
+        </label>
+        <label>곡 제목
+          <input id="post-song" maxlength="40" placeholder="없으면 비워두기" />
+        </label>
+        <label>가수
+          <input id="post-artist" maxlength="40" placeholder="없으면 비워두기" />
+        </label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label>글 (최대 80자)
+          <textarea id="post-text" maxlength="80" placeholder="남길 흔적"></textarea>
+        </label>
+      </div>
+      <div class="actions">
+        <button id="post-btn" type="button">올리기</button>
+      </div>
+      <div class="msg" id="post-msg"></div>
+    </section>
+
+    <section>
+      <h2>위로 답장</h2>
+      <div class="row cols-2">
+        <label>메모 id
+          <input id="reply-id" placeholder="아래에서 고르거나 Firebase 문서 id" />
+        </label>
+        <label>테마 필터 (목록용)
+          <select id="list-theme">
+            <option value="">전체</option>
+            <option value="desert">desert</option>
+            <option value="forest">forest</option>
+            <option value="ocean">ocean</option>
+            <option value="space">space</option>
+          </select>
+        </label>
+      </div>
+      <div class="row cols-2" style="margin-top:10px">
+        <label>곡 제목
+          <input id="reply-song" maxlength="40" placeholder="없으면 비워두기" />
+        </label>
+        <label>가수
+          <input id="reply-artist" maxlength="40" placeholder="없으면 비워두기" />
+        </label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label>답장 (최대 80자)
+          <textarea id="reply-text" maxlength="80" placeholder="위로 한마디"></textarea>
+        </label>
+      </div>
+      <div class="actions">
+        <button id="reply-btn" type="button">답장 남기기</button>
+        <button id="refresh-btn" class="secondary" type="button">목록 새로고침</button>
+      </div>
+      <div class="msg" id="reply-msg"></div>
+    </section>
+
+    <section>
+      <h2>살아 있는 글</h2>
+      <div class="filters">
+        <span class="badge" id="count-badge">0</span>
+      </div>
+      <div id="list"></div>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    function setMsg(el, text, kind) {
+      el.textContent = text || '';
+      el.className = 'msg' + (kind ? ' ' + kind : '');
+    }
+
+    async function api(path, opts) {
+      const res = await fetch(path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...opts,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      return data;
+    }
+
+    function preview(text) {
+      const t = String(text || '').replace(/\s+/g, ' ').trim();
+      return t.length > 48 ? t.slice(0, 48) + '…' : t;
+    }
+
+    async function refreshList() {
+      const theme = $('list-theme').value;
+      const q = theme ? `?theme=${encodeURIComponent(theme)}` : '';
+      const { memos } = await api('/api/memos' + q);
+      $('count-badge').textContent = `${memos.length}개`;
+      if (!memos.length) {
+        $('list').innerHTML = '<p class="empty">살아 있는 글이 없어요.</p>';
+        return;
+      }
+      const rows = memos.map((m) => {
+        const song = [m.song, m.artist].filter(Boolean).join(' / ');
+        const badge = m.replies === 0
+          ? '<span class="badge warn">답장 없음</span>'
+          : `<span class="badge">답장 ${m.replies}</span>`;
+        return `<tr>
+          <td>
+            <div class="id">${m.id}</div>
+            <div style="margin-top:4px">${badge}</div>
+          </td>
+          <td><span class="badge">${m.theme}</span></td>
+          <td>
+            <div>${preview(m.text)}</div>
+            ${song ? `<div style="color:var(--muted);margin-top:4px">♪ ${song}</div>` : ''}
+          </td>
+          <td><button class="pick" type="button" data-id="${m.id}">이 글에 답장</button></td>
+        </tr>`;
+      }).join('');
+      $('list').innerHTML = `<table>
+        <thead><tr><th>id</th><th>테마</th><th>내용</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+      $('list').querySelectorAll('.pick').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          $('reply-id').value = btn.dataset.id;
+          $('reply-text').focus();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+      });
+    }
+
+    $('post-btn').addEventListener('click', async () => {
+      const btn = $('post-btn');
+      btn.disabled = true;
+      setMsg($('post-msg'), '올리는 중…');
+      try {
+        const posted = (await api('/api/memos', {
+          method: 'POST',
+          body: JSON.stringify({
+            theme: $('post-theme').value,
+            text: $('post-text').value,
+            song: $('post-song').value,
+            artist: $('post-artist').value,
+          }),
+        })).posted;
+        setMsg($('post-msg'), `올렸음 · id ${posted.id}`, 'ok');
+        $('post-text').value = '';
+        await refreshList();
+      } catch (e) {
+        setMsg($('post-msg'), e.message, 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    $('reply-btn').addEventListener('click', async () => {
+      const btn = $('reply-btn');
+      btn.disabled = true;
+      setMsg($('reply-msg'), '답장 중…');
+      try {
+        const posted = (await api('/api/replies', {
+          method: 'POST',
+          body: JSON.stringify({
+            memoId: $('reply-id').value,
+            text: $('reply-text').value,
+            song: $('reply-song').value,
+            artist: $('reply-artist').value,
+          }),
+        })).posted;
+        setMsg($('reply-msg'), `답장함 · ${posted.uid}`, 'ok');
+        $('reply-text').value = '';
+        await refreshList();
+      } catch (e) {
+        setMsg($('reply-msg'), e.message, 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    $('refresh-btn').addEventListener('click', () => {
+      refreshList().catch((e) => setMsg($('reply-msg'), e.message, 'err'));
+    });
+    $('list-theme').addEventListener('change', () => {
+      refreshList().catch((e) => setMsg($('reply-msg'), e.message, 'err'));
+    });
+
+    refreshList().catch((e) => setMsg($('reply-msg'), e.message, 'err'));
+  </script>
+</body>
+</html>

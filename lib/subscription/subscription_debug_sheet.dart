@@ -75,7 +75,17 @@ class _SubscriptionDebugSheetState extends State<_SubscriptionDebugSheet> {
                   _row('Entitlement', SubscriptionConfig.entitlementId),
                   _row(
                     '구독 상태',
-                    _sub.isSubscribed ? '활성 (Parallel Pro)' : '없음',
+                    _sub.isSubscribed
+                        ? '활성 (Parallel Pro)'
+                        : _sub.isInTrial
+                            ? '체험 중 (${_sub.trialDaysLeft}일+)'
+                            : _sub.trialEnded
+                                ? '체험 종료'
+                                : '없음',
+                  ),
+                  _row(
+                    'Plus 접근',
+                    _sub.hasPlusAccess ? '열림' : '잠김',
                   ),
                   _row('상품', productId ?? '(패키지 없음)'),
                   _row('가격', price ?? '-'),
@@ -99,6 +109,28 @@ class _SubscriptionDebugSheetState extends State<_SubscriptionDebugSheet> {
                       ),
                     ),
                   ],
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: _busy
+                        ? null
+                        : () async {
+                            await _sub.debugEndTrial();
+                            if (!mounted) return;
+                            setState(() => _message = '체험 종료 처리됨');
+                          },
+                    child: const Text('디버그: 체험 종료'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton(
+                    onPressed: _busy
+                        ? null
+                        : () async {
+                            await _sub.debugRestartTrial();
+                            if (!mounted) return;
+                            setState(() => _message = '체험 다시 시작됨');
+                          },
+                    child: const Text('디버그: 체험 다시 시작'),
+                  ),
                   if (_message != null) ...[
                     const SizedBox(height: 10),
                     Text(

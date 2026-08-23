@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'theme_music_catalog.dart';
 
-enum AmbienceScene { desert, forest, ocean }
+enum AmbienceScene { desert, forest, ocean, space }
 
 /// Nature bed (on by default) + optional song, mixed together.
 ///
@@ -20,15 +20,18 @@ class AmbientMusic {
   static const desertNaturePath = 'audio/nature_desert.wav';
   static const forestNaturePath = 'audio/nature_forest.wav';
   static const oceanNaturePath = 'audio/nature_ocean.wav';
+  static const spaceNaturePath = 'audio/nature_space.wav';
 
-  static const songVolume = 0.35;
-  static const natureVolumeSolo = 0.30;
-  static const natureVolumeWithSong = 0.16;
+  static const songVolume = 0.30;
+  /// Nature beds need to cut through earphones + song.
+  static const natureVolumeSolo = 0.48;
+  static const natureVolumeWithSong = 0.34;
 
   /// Keep in sync with generated nature WAVs.
   static const _desertBedLength = Duration(milliseconds: 25200);
   static const _forestBedLength = Duration(milliseconds: 25000);
   static const _oceanBedLength = Duration(milliseconds: 192000);
+  static const _spaceBedLength = Duration(milliseconds: 28000);
 
   /// Overlap at the join — no hard stop (avoids desert crackle).
   static const _seamCrossfade = Duration(milliseconds: 1400);
@@ -50,20 +53,45 @@ class AmbientMusic {
   AudioPlayer? _natureA;
   AudioPlayer? _natureB;
   AudioPlayer? _activeNature;
-  AudioPlayer? _song;
+  AudioPlayer? _songA;
+  AudioPlayer? _songB;
+  AudioPlayer? _activeSong;
+  StreamSubscription<void>? _songCompleteSubA;
+  StreamSubscription<void>? _songCompleteSubB;
+  String? _preloadedStem;
 
   AmbienceScene? _natureScene;
   bool _songStarted = false;
   bool _disposed = false;
   bool _cycling = false;
+  /// When true, finished tracks advance through the suite forever.
+  bool _songSuiteActive = false;
   Timer? _loopTimer;
   int _natureEpoch = 0;
+
+  List<ThemeTrack> _songTracks = [];
+  int _songIndex = 0;
+  AmbienceScene? _songTracksScene;
+
+  /// Fired when the current song title / playing state may have changed.
+  void Function()? onSongChanged;
+
+  /// Display title for the current theme track (e.g. Vesper).
+  String? get songTitle {
+    if (_songTracks.isEmpty) return null;
+    final i = _songIndex.clamp(0, _songTracks.length - 1);
+    return _songTracks[i].title;
+  }
+
+  int get songTrackCount => _songTracks.length;
 
   /// Per-theme user gain (0 = mute, 1 = calibrated default, up to 1.5).
   final Map<AmbienceScene, double> _natureGain = {
     AmbienceScene.desert: 1.0,
     AmbienceScene.forest: 1.0,
     AmbienceScene.ocean: 1.0,
+    // Stars: silence by default — open-field wind doesn't match the sky.
+    AmbienceScene.space: 0.0,
   };
 
   bool _prefsLoaded = false;
@@ -126,16 +154,20 @@ class AmbientMusic {
     _activeNature ??= _natureA;
   }
 
-  bool get isSongPlaying => _song?.state == PlayerState.playing;
+  bool get isSongPlaying => _activeSong?.state == PlayerState.playing;
 
   double get _natureVolume {
     final base = isSongPlaying ? natureVolumeWithSong : natureVolumeSolo;
     final scene = _natureScene;
     var calibrated = base;
     if (scene == AmbienceScene.ocean) {
-      calibrated = base * 0.52;
+      // Ocean WAV is already loud in peaks — keep a mild duck, not a heavy one.
+      calibrated = base * 0.78;
     } else if (scene == AmbienceScene.desert) {
-      calibrated = (base * 1.45).clamp(0.0, 1.0);
+      calibrated = (base * 1.35).clamp(0.0, 1.0);
+    } else if (scene == AmbienceScene.space) {
+      // Star theme is silence — no nature bed.
+      calibrated = 0;
     }
     final gain = scene == null ? 1.0 : natureGain(scene);
     return (calibrated * gain).clamp(0.0, 1.0);
@@ -155,25 +187,65 @@ class AmbientMusic {
     AmbienceScene.desert => desertNaturePath,
     AmbienceScene.forest => forestNaturePath,
     AmbienceScene.ocean => oceanNaturePath,
+    AmbienceScene.space => spaceNaturePath,
   };
 
   Duration _bedLength(AmbienceScene scene) => switch (scene) {
     AmbienceScene.desert => _desertBedLength,
     AmbienceScene.forest => _forestBedLength,
     AmbienceScene.ocean => _oceanBedLength,
+    AmbienceScene.space => _spaceBedLength,
   };
 
-  Future<void> setScene(AmbienceScene scene) async {
+  Future<void> setScene(
+    AmbienceScene scene, {
+    bool restartSong = false,
+  }) async {
     if (_disposed) return;
-    await _ensurePrefs();
 
     final sceneChanged = _natureScene != scene;
-    final songWasPlaying = isSongPlaying;
+    Future<void>? songRestart;
+
+    if (sceneChanged) {
+      // Mute old BGM before any prefs/network work.
+      await _stopSongImmediate();
+      _songTracks = [];
+      _songTracksScene = null;
+      _songIndex = 0;
+      _songStarted = false;
+      _preloadedStem = null;
+      _natureScene = scene;
+      if (restartSong) {
+        // Start new theme BGM without waiting for the nature bed swap.
+        songRestart = playSong(forceReload: true);
+      }
+    }
+
+    await _ensurePrefs();
 
     await _ensurePlayers();
     final active = _activeNature!;
 
-    if (_natureScene == scene) {
+    // Stars: no nature bed — stop any leftover loop and keep quiet.
+    if (scene == AmbienceScene.space) {
+      final epoch = ++_natureEpoch;
+      _loopTimer?.cancel();
+      _cycling = false;
+      final standby = identical(active, _natureA) ? _natureB! : _natureA!;
+      await active.setVolume(0);
+      await standby.setVolume(0);
+      try {
+        await active.stop();
+      } catch (_) {}
+      try {
+        await standby.stop();
+      } catch (_) {}
+      if (songRestart != null) await songRestart;
+      if (_disposed || epoch != _natureEpoch) return;
+      return;
+    }
+
+    if (!sceneChanged && _natureScene == scene) {
       if (active.state != PlayerState.playing) {
         await active.setVolume(0);
         if (_usesNativeLoop(scene)) {
@@ -209,6 +281,7 @@ class AmbientMusic {
       await standby.stop();
     } catch (_) {}
 
+    // _natureScene already set when sceneChanged; keep in sync otherwise.
     _natureScene = scene;
     final path = _naturePath(scene);
     await active.setVolume(0);
@@ -233,11 +306,32 @@ class AmbientMusic {
       _scheduleCycle();
     }
 
-    if (sceneChanged && songWasPlaying) {
-      _songStarted = false;
-      await playSong();
+    if (songRestart != null) await songRestart;
+  }
+
+  /// Hard-stop theme BGM with no fade (used on scene change).
+  Future<void> _stopSongImmediate() async {
+    _songSuiteActive = false;
+    _songStarted = false;
+    _preloadedStem = null;
+    // Mute first — perceived cut is instant even if stop() is slow.
+    for (final player in [_activeSong, _songA, _songB]) {
+      if (player == null) continue;
+      try {
+        player.setVolume(0);
+      } catch (_) {}
+    }
+    onSongChanged?.call();
+    for (final player in [_activeSong, _songA, _songB]) {
+      if (player == null) continue;
+      try {
+        await player.stop();
+      } catch (_) {}
     }
   }
+
+  /// Public instant mute+stop for UI theme switches.
+  Future<void> cutSongNow() => _stopSongImmediate();
 
   void _scheduleCycle() {
     _loopTimer?.cancel();
@@ -329,42 +423,200 @@ class AmbientMusic {
     await _activeNature?.setVolume(_natureVolume);
   }
 
-  Future<void> playSong() async {
-    if (_disposed) return;
-    final scene = _natureScene;
-    final player = _song ??= await _createPlayer();
-    await player.setReleaseMode(ReleaseMode.loop);
-    await player.setVolume(songVolume);
+  Future<void> _ensureSongPlayers() async {
+    _songA ??= await _createSongPlayer(isA: true);
+    _songB ??= await _createSongPlayer(isA: false);
+    _activeSong ??= _songA;
+  }
 
-    if (_songStarted && player.state != PlayerState.stopped) {
+  Future<AudioPlayer> _createSongPlayer({required bool isA}) async {
+    final player = await _createPlayer();
+    await player.setReleaseMode(ReleaseMode.stop);
+    await player.setVolume(0);
+    final sub = player.onPlayerComplete.listen((_) {
+      if (_disposed || !_songSuiteActive) return;
+      if (!identical(player, _activeSong)) return;
+      unawaited(_advanceSongSuite());
+    });
+    if (isA) {
+      _songCompleteSubA = sub;
+    } else {
+      _songCompleteSubB = sub;
+    }
+    return player;
+  }
+
+  AudioPlayer _standbySong(AudioPlayer active) =>
+      identical(active, _songA) ? _songB! : _songA!;
+
+  Future<void> _advanceSongSuite() async {
+    if (_disposed || !_songSuiteActive) return;
+    final scene = _natureScene;
+    if (scene == null) return;
+    await _ensureSongTracks(scene);
+    if (_songTracks.isEmpty) {
+      _songStarted = false;
+      await playSong(forceReload: true);
+      return;
+    }
+    final next = (_songIndex + 1) % _songTracks.length;
+    await _playTrackAt(next);
+  }
+
+  Future<void> prefetchSongTracks() async {
+    final scene = _natureScene;
+    if (scene == null || _disposed) return;
+    await _ensureSongTracks(scene);
+  }
+
+  Future<void> playSong({bool forceReload = false}) async {
+    if (_disposed) return;
+    await _ensureSongPlayers();
+    final player = _activeSong!;
+
+    if (!forceReload &&
+        _songStarted &&
+        player.state != PlayerState.stopped &&
+        player.state != PlayerState.completed) {
+      _songSuiteActive = true;
+      await player.setVolume(songVolume);
       await player.resume();
       await _applyNatureVolume();
+      onSongChanged?.call();
       return;
     }
 
-    final source = await _songSourceFor(scene);
-    await player.play(source);
+    final scene = _natureScene;
+    if (scene != null) {
+      await _ensureSongTracks(scene);
+    }
+    if (_songTracks.isNotEmpty) {
+      await _playTrackAt(_songIndex.clamp(0, _songTracks.length - 1));
+      return;
+    }
+
+    // Local asset fallback — single looping bed.
+    await player.setReleaseMode(ReleaseMode.loop);
+    await player.setVolume(songVolume);
+    await player.play(AssetSource(songPath));
     _songStarted = true;
+    _songSuiteActive = true;
+    _preloadedStem = null;
     await _applyNatureVolume();
+    onSongChanged?.call();
   }
 
-  Future<Source> _songSourceFor(AmbienceScene? scene) async {
-    if (scene != null) {
-      try {
-        final uri = await _catalog.resolveTrack(scene);
-        if (uri != null) {
-          return UrlSource(uri.toString());
-        }
-      } catch (_) {
-        // Fall through to local asset.
-      }
+  Future<void> _playTrackAt(int index) async {
+    if (_disposed) return;
+    await _ensureSongPlayers();
+    final scene = _natureScene;
+    if (scene != null) await _ensureSongTracks(scene);
+    if (_songTracks.isEmpty) {
+      await playSong(forceReload: true);
+      return;
     }
-    return AssetSource(songPath);
+
+    _songIndex = index.clamp(0, _songTracks.length - 1);
+    final track = _songTracks[_songIndex];
+    final active = _activeSong!;
+    final standby = _standbySong(active);
+
+    _songSuiteActive = true;
+    await active.setReleaseMode(ReleaseMode.stop);
+    await standby.setReleaseMode(ReleaseMode.stop);
+
+    // Instant handoff when the standby player already buffered this track.
+    if (_preloadedStem == track.fileStem) {
+      try {
+        await active.setVolume(0);
+        await active.pause();
+      } catch (_) {}
+      try {
+        await standby.seek(Duration.zero);
+      } catch (_) {}
+      await standby.setVolume(songVolume);
+      await standby.resume();
+      _activeSong = standby;
+      _preloadedStem = null;
+    } else {
+      await active.setVolume(songVolume);
+      await active.play(UrlSource(track.uri.toString()));
+      _activeSong = active;
+      _preloadedStem = null;
+    }
+
+    _songStarted = true;
+    await _applyNatureVolume();
+    onSongChanged?.call();
+    unawaited(_preloadNeighbor());
+  }
+
+  /// Warm the next track on the idle player so skips feel instant.
+  Future<void> _preloadNeighbor() async {
+    if (_disposed || _songTracks.length < 2) return;
+    final active = _activeSong;
+    if (active == null) return;
+    final standby = _standbySong(active);
+    final nextIndex = (_songIndex + 1) % _songTracks.length;
+    final track = _songTracks[nextIndex];
+    if (_preloadedStem == track.fileStem) return;
+    try {
+      await standby.setVolume(0);
+      await standby.setSource(UrlSource(track.uri.toString()));
+      try {
+        await standby.seek(Duration.zero);
+      } catch (_) {}
+      await standby.pause();
+      if (_disposed) return;
+      _preloadedStem = track.fileStem;
+    } catch (_) {
+      _preloadedStem = null;
+    }
+  }
+
+  Future<void> playNextSong() async {
+    if (_disposed) return;
+    final scene = _natureScene;
+    if (scene == null) return;
+    await _ensureSongTracks(scene);
+    if (_songTracks.isEmpty) {
+      await playSong(forceReload: true);
+      return;
+    }
+    final next = (_songIndex + 1) % _songTracks.length;
+    await _playTrackAt(next);
+  }
+
+  Future<void> playPreviousSong() async {
+    if (_disposed) return;
+    final scene = _natureScene;
+    if (scene == null) return;
+    await _ensureSongTracks(scene);
+    if (_songTracks.isEmpty) {
+      await playSong(forceReload: true);
+      return;
+    }
+    var prev = _songIndex - 1;
+    if (prev < 0) prev = _songTracks.length - 1;
+    await _playTrackAt(prev);
+  }
+
+  Future<void> _ensureSongTracks(AmbienceScene scene) async {
+    if (_songTracksScene == scene && _songTracks.isNotEmpty) return;
+    try {
+      _songTracks = await _catalog.tracksFor(scene);
+    } catch (_) {
+      _songTracks = [];
+    }
+    _songTracksScene = scene;
+    _songIndex = 0;
+    _preloadedStem = null;
   }
 
   Future<void> pauseSong() async {
     if (_disposed) return;
-    final player = _song;
+    _songSuiteActive = false;
+    final player = _activeSong;
     if (player != null && player.state == PlayerState.playing) {
       await _fade(
         player,
@@ -375,6 +627,7 @@ class AmbientMusic {
       await player.pause();
     }
     await _applyNatureVolume();
+    onSongChanged?.call();
   }
 
   Future<void> toggleSong() async {
@@ -388,19 +641,31 @@ class AmbientMusic {
 
   Future<void> dispose() async {
     _disposed = true;
+    _songSuiteActive = false;
     _loopTimer?.cancel();
     _loopTimer = null;
     _natureScene = null;
+    _songTracks = [];
+    _songTracksScene = null;
+    _preloadedStem = null;
+    await _songCompleteSubA?.cancel();
+    await _songCompleteSubB?.cancel();
+    _songCompleteSubA = null;
+    _songCompleteSubB = null;
     final a = _natureA;
     final b = _natureB;
-    final song = _song;
+    final songA = _songA;
+    final songB = _songB;
     _natureA = null;
     _natureB = null;
     _activeNature = null;
-    _song = null;
+    _songA = null;
+    _songB = null;
+    _activeSong = null;
     _songStarted = false;
     await a?.dispose();
     await b?.dispose();
-    await song?.dispose();
+    await songA?.dispose();
+    await songB?.dispose();
   }
 }

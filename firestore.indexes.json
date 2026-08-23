@@ -7,6 +7,14 @@
         { "fieldPath": "theme", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "memos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ambientReplied", "order": "ASCENDING" },
+        { "fieldPath": "ambientReplyAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
