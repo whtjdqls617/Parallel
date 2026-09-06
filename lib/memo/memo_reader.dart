@@ -2,8 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../subscription/subscription_gate.dart';
-import '../subscription/subscription_service.dart';
 import '../welcome/welcome_host.dart';
 import '../welcome/welcome_panel_tip.dart';
 import 'memo.dart';
@@ -93,15 +91,6 @@ class _MemoReaderLetterState extends State<_MemoReaderLetter> {
 
   Future<void> _reply() async {
     if (!_canReply) return;
-    if (!SubscriptionService.instance.hasPlusAccess) {
-      await showSubscriptionGate(
-        context,
-        reason: SubscriptionService.instance.trialEnded
-            ? '체험이 끝났어요. 답장을 남기려면 Parallel Plus가 필요해요.'
-            : '답장을 남기려면 Parallel Plus가 필요해요.',
-      );
-      return;
-    }
 
     final draft = await showMemoReplySheet(context, theme: widget.theme);
     if (draft == null || draft.text.trim().isEmpty || !mounted) return;
@@ -129,6 +118,15 @@ class _MemoReaderLetterState extends State<_MemoReaderLetter> {
         _memo = updated;
         _hideReplies = false;
       });
+    } on MemoWriteException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+        ),
+      );
     } catch (e, st) {
       debugPrint('Memo reply failed: $e\n$st');
       if (!mounted) return;
@@ -338,7 +336,7 @@ class _MemoReaderLetterState extends State<_MemoReaderLetter> {
   Widget build(BuildContext context) {
     final theme = widget.theme;
     final isForest = theme == MemoTheme.forest;
-    final isOcean = theme == MemoTheme.ocean;
+    final isOcean = theme == MemoTheme.ocean || theme == MemoTheme.rain;
     final isSpace = theme == MemoTheme.space;
     final isMine = _memo.isOwnedBy(widget.service.currentUid);
     final paper = isMine
@@ -693,19 +691,25 @@ Future<bool?> _confirmDeleteReply(
     MemoTheme.forest => const Color(0xFF1A2820),
     MemoTheme.ocean => const Color(0xFF1A2830),
     MemoTheme.space => const Color(0xFF12182A),
+    MemoTheme.rain => const Color(0xFF1A2030),
     MemoTheme.desert => const Color(0xFFE8C898),
+    MemoTheme.fire => const Color(0xFF241810),
   };
   final ink = switch (theme) {
     MemoTheme.forest => const Color(0xFFE8DCC8),
     MemoTheme.ocean => const Color(0xFFD8E4E8),
     MemoTheme.space => const Color(0xFFD8DCE8),
+    MemoTheme.rain => const Color(0xFFD0DCE8),
     MemoTheme.desert => const Color(0xFF4A3018),
+    MemoTheme.fire => const Color(0xFFE8D4B8),
   };
   final accent = switch (theme) {
     MemoTheme.forest => const Color(0xFF3A4A38),
     MemoTheme.ocean => const Color(0xFF3A5460),
     MemoTheme.space => const Color(0xFF3A4860),
+    MemoTheme.rain => const Color(0xFF3A4858),
     MemoTheme.desert => const Color(0xFF8A5A30),
+    MemoTheme.fire => const Color(0xFFB86830),
   };
   final accentInk = cool
       ? const Color(0xFFE0ECF0)

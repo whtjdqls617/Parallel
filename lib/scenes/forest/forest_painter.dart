@@ -14,6 +14,7 @@ class ForestPainter extends CustomPainter {
     this.mossCount = 0,
     this.mossReveal = 1,
     this.mossErase = 0,
+    this.showPresence = true,
   });
 
   final double t;
@@ -21,6 +22,9 @@ class ForestPainter extends CustomPainter {
   final int mossCount;
   final double mossReveal;
   final double mossErase;
+
+  /// When false, skip fireflies / water presence (theme grid thumbs).
+  final bool showPresence;
 
   static const breathPeriod = 5.5;
   static const mossEraseSeconds = 1.15;
@@ -92,21 +96,25 @@ class ForestPainter extends CustomPainter {
       breath: breath,
       wind: wind,
     );
-    _paintPresenceOnWater(
-      canvas,
-      size,
-      waterTop: waterTop,
-      waterBottom: shoreY,
-      breath: breath,
-      wind: wind,
-    );
+    if (showPresence) {
+      _paintPresenceOnWater(
+        canvas,
+        size,
+        waterTop: waterTop,
+        waterBottom: shoreY,
+        breath: breath,
+        wind: wind,
+      );
+    }
     _paintMist(canvas, size, y: waterTop + 8, strength: 0.22, breath: breath);
 
     _paintNearShore(canvas, size, startY: shoreY, wind: wind);
     _paintShorePlants(canvas, size, wind: wind);
     _paintRocks(canvas, size, breath: breath);
 
-    _paintPresenceSpirits(canvas, size, breath: breath);
+    if (showPresence) {
+      _paintPresenceSpirits(canvas, size, breath: breath);
+    }
     _paintComfortGlow(canvas, size, breath);
     _paintVignette(canvas, size, breath);
   }
@@ -1154,5 +1162,6 @@ class ForestPainter extends CustomPainter {
       oldDelegate.presenceCount != presenceCount ||
       oldDelegate.mossCount != mossCount ||
       oldDelegate.mossReveal != mossReveal ||
-      oldDelegate.mossErase != mossErase;
+      oldDelegate.mossErase != mossErase ||
+      oldDelegate.showPresence != showPresence;
 }

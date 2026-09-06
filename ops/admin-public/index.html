@@ -149,8 +149,34 @@
   <main>
     <header>
       <h1>Parallel 관리</h1>
-      <p class="sub">로컬 전용 · 글 올리기 / 위로 답장 · 이 탭만 쓰면 됩니다</p>
+      <p class="sub">로컬 전용 · 글 올리기 / 위로 답장 / 강제 업데이트 버전 · 이 탭만 쓰면 됩니다</p>
     </header>
+
+    <section>
+      <h2>스토어 버전 (강제 업데이트)</h2>
+      <p class="sub" style="margin:0 0 12px">스토어에 올린 뒤 실제 반영을 확인한 다음 여기만 올리세요. major·minor가 앱보다 높으면 강제 업데이트됩니다. patch만 올리면 강제하지 않습니다.</p>
+      <div class="row cols-2">
+        <label>iOS (예: 1.1.0)
+          <input id="ver-ios" placeholder="1.0.0" />
+        </label>
+        <label>Android (예: 1.1.0)
+          <input id="ver-android" placeholder="1.0.0" />
+        </label>
+      </div>
+      <div class="row cols-2" style="margin-top:10px">
+        <label>iOS 스토어 URL
+          <input id="ver-ios-url" placeholder="https://apps.apple.com/app/id…" />
+        </label>
+        <label>Android 스토어 URL
+          <input id="ver-android-url" placeholder="https://play.google.com/store/apps/details?id=…" />
+        </label>
+      </div>
+      <div class="actions">
+        <button id="ver-save" type="button">DB에 저장</button>
+        <button id="ver-refresh" class="secondary" type="button">다시 불러오기</button>
+      </div>
+      <div class="msg" id="ver-msg"></div>
+    </section>
 
     <section>
       <h2>글 올리기</h2>
@@ -161,6 +187,8 @@
             <option value="forest">forest (숲)</option>
             <option value="ocean">ocean (바다)</option>
             <option value="space">space (별)</option>
+            <option value="rain">rain (창공)</option>
+            <option value="fire">fire (불멍)</option>
           </select>
         </label>
         <label>곡 제목
@@ -194,6 +222,8 @@
             <option value="forest">forest</option>
             <option value="ocean">ocean</option>
             <option value="space">space</option>
+            <option value="rain">rain</option>
+            <option value="fire">fire</option>
           </select>
         </label>
       </div>
@@ -289,6 +319,49 @@
       });
     }
 
+    async function loadVersion() {
+      const { version } = await api('/api/version');
+      $('ver-ios').value = version.ios || '';
+      $('ver-android').value = version.android || '';
+      $('ver-ios-url').value = version.iosStoreUrl || '';
+      $('ver-android-url').value = version.androidStoreUrl || '';
+      setMsg($('ver-msg'), `현재 DB · iOS ${version.ios} / Android ${version.android}`, 'ok');
+    }
+
+    $('ver-save').addEventListener('click', async () => {
+      const btn = $('ver-save');
+      btn.disabled = true;
+      setMsg($('ver-msg'), '저장 중…');
+      try {
+        const { version } = await api('/api/version', {
+          method: 'POST',
+          body: JSON.stringify({
+            ios: $('ver-ios').value,
+            android: $('ver-android').value,
+            iosStoreUrl: $('ver-ios-url').value,
+            androidStoreUrl: $('ver-android-url').value,
+          }),
+        });
+        $('ver-ios').value = version.ios;
+        $('ver-android').value = version.android;
+        $('ver-ios-url').value = version.iosStoreUrl;
+        $('ver-android-url').value = version.androidStoreUrl;
+        setMsg(
+          $('ver-msg'),
+          `저장됨 · iOS ${version.ios} / Android ${version.android}\n(major·minor만 강제 업데이트)`,
+          'ok',
+        );
+      } catch (e) {
+        setMsg($('ver-msg'), e.message, 'err');
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    $('ver-refresh').addEventListener('click', () => {
+      loadVersion().catch((e) => setMsg($('ver-msg'), e.message, 'err'));
+    });
+
     $('post-btn').addEventListener('click', async () => {
       const btn = $('post-btn');
       btn.disabled = true;
@@ -345,6 +418,7 @@
     });
 
     refreshList().catch((e) => setMsg($('reply-msg'), e.message, 'err'));
+    loadVersion().catch((e) => setMsg($('ver-msg'), e.message, 'err'));
   </script>
 </body>
 </html>

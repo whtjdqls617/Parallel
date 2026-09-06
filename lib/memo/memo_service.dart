@@ -2,7 +2,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../subscription/subscription_config.dart';
 import 'memo.dart';
+import 'memo_content_filter.dart';
+
+/// User-facing write failure (filter / daily quota).
+class MemoWriteException implements Exception {
+  MemoWriteException(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
 
 /// Shared memos backed by Firestore `memos/{id}`.
 class MemoService {
@@ -73,6 +83,7 @@ class MemoService {
     required String text,
     required String artist,
     required String song,
+    bool unlimited = false,
   }) async {
     final trimmed = text.trim();
     final artistTrimmed = artist.trim();
@@ -90,7 +101,29 @@ class MemoService {
       throw ArgumentError('Song title is too long');
     }
 
+    final blocked = MemoContentFilter.rejectReason(trimmed);
+    if (blocked != null) {
+      throw MemoWriteException(blocked);
+    }
+    if (artistTrimmed.isNotEmpty || songTrimmed.isNotEmpty) {
+      final songBlocked = MemoContentFilter.rejectReason(
+        '$artistTrimmed $songTrimmed',
+      );
+      if (songBlocked != null) {
+        throw MemoWriteException(songBlocked);
+      }
+    }
+
     final uid = await _ensureUid();
+    if (!unlimited) {
+      final used = await countCreatedToday(uid);
+      if (used >= SubscriptionConfig.freeMemosPerDay) {
+        throw MemoWriteException(
+          '오늘은 이미 한 장 남겼어요. Plus면 무제한으로 남길 수 있어요.',
+        );
+      }
+    }
+
     final ref = _memos.doc();
     final now = DateTime.now().toUtc();
     final expiresAt = now.add(Memo.lifetime);
@@ -115,6 +148,26 @@ class MemoService {
       expiresAt: expiresAt,
       uid: uid,
     );
+  }
+
+  /// Memos this uid created since start of today (Asia/Seoul).
+  Future<int> countCreatedToday(String uid) async {
+    final start = _startOfTodayKst();
+    final snap = await _memos
+        .where('uid', isEqualTo: uid)
+        .where(
+          'createdAt',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(start),
+        )
+        .limit(SubscriptionConfig.freeMemosPerDay + 5)
+        .get();
+    return snap.docs.length;
+  }
+
+  static DateTime _startOfTodayKst() {
+    final kst = DateTime.now().toUtc().add(const Duration(hours: 9));
+    final startKst = DateTime(kst.year, kst.month, kst.day);
+    return startKst.subtract(const Duration(hours: 9));
   }
 
   /// Leave one quiet reply sticky — at most once per person per memo.
@@ -142,6 +195,11 @@ class MemoService {
     }
     if (songTrimmed.length > Memo.maxSongLength) {
       throw ArgumentError('Song title is too long');
+    }
+
+    final blocked = MemoContentFilter.rejectReason(trimmed);
+    if (blocked != null) {
+      throw MemoWriteException(blocked);
     }
 
     final uid = await _ensureUid();
@@ -226,6 +284,11 @@ class MemoService {
     }
     if (songTrimmed.length > Memo.maxSongLength) {
       throw ArgumentError('Song title is too long');
+    }
+
+    final blocked = MemoContentFilter.rejectReason(trimmed);
+    if (blocked != null) {
+      throw MemoWriteException(blocked);
     }
 
     final uid = await _ensureUid();

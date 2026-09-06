@@ -12,20 +12,26 @@ import '../notify/push_service.dart';
 import '../presence/ambient_presence.dart';
 import '../presence/presence_service.dart';
 import '../scenes/desert/desert_scene.dart';
+import '../scenes/fire/fire_scene.dart';
 import '../scenes/forest/forest_scene.dart';
 import '../scenes/ocean/ocean_scene.dart';
-import '../subscription/subscription_debug_sheet.dart';
+import '../scenes/rain/rain_scene.dart';
+import '../settings/settings_sheet.dart';
 import '../subscription/subscription_gate.dart';
 import '../subscription/subscription_service.dart';
 import '../theme/desert_palette.dart';
+import '../theme/fire_palette.dart';
 import '../theme/forest_palette.dart';
 import '../theme/ocean_palette.dart';
+import '../theme/rain_palette.dart';
 import '../theme/space_palette.dart';
+import '../theme/theme_grid_sheet.dart';
+import '../version/force_update_gate.dart';
 import '../welcome/welcome_host.dart';
 import '../welcome/welcome_overlay.dart';
 import '../welcome/welcome_scope.dart';
 
-enum _SceneKind { desert, forest, ocean, space }
+enum _SceneKind { desert, forest, ocean, space, rain, fire }
 
 class ParallelApp extends StatelessWidget {
   const ParallelApp({super.key});
@@ -39,7 +45,7 @@ class ParallelApp extends StatelessWidget {
         brightness: Brightness.light,
         useMaterial3: true,
       ),
-      home: const _ScenePicker(),
+      home: const ForceUpdateHost(child: _ScenePicker()),
     );
   }
 }
@@ -54,15 +60,15 @@ class _ScenePicker extends StatefulWidget {
 
 class _ScenePickerState extends State<_ScenePicker>
     with WidgetsBindingObserver {
-  /// Free tier starts in the desert; forest / ocean / space require Parallel Plus.
+  /// Free tier starts in the desert; other places require Parallel Plus.
   _SceneKind _kind = _SceneKind.desert;
   final AmbientMusic _audio = AmbientMusic();
   final PresenceService _presence = PresenceService();
   final SubscriptionService _subscription = SubscriptionService.instance;
   final WelcomeHost _welcome = WelcomeHost();
   final GlobalKey _musicBarKey = GlobalKey();
-  final GlobalKey _musicTitleKey = GlobalKey();
-  final GlobalKey _themeBarKey = GlobalKey();
+  final GlobalKey _placesKey = GlobalKey();
+  final GlobalKey _settingsKey = GlobalKey();
   bool _musicOn = false;
   /// User intent — music starts on by default; pause clears this.
   bool _musicWanted = true;
@@ -76,13 +82,17 @@ class _ScenePickerState extends State<_ScenePicker>
   bool get _needsPlus =>
       _kind == _SceneKind.forest ||
       _kind == _SceneKind.ocean ||
-      _kind == _SceneKind.space;
+      _kind == _SceneKind.space ||
+      _kind == _SceneKind.rain ||
+      _kind == _SceneKind.fire;
 
   AmbienceScene get _ambience => switch (_kind) {
     _SceneKind.desert => AmbienceScene.desert,
     _SceneKind.forest => AmbienceScene.forest,
     _SceneKind.ocean => AmbienceScene.ocean,
     _SceneKind.space => AmbienceScene.space,
+    _SceneKind.rain => AmbienceScene.rain,
+    _SceneKind.fire => AmbienceScene.fire,
   };
 
   MemoTheme get _memoTheme => switch (_kind) {
@@ -90,6 +100,8 @@ class _ScenePickerState extends State<_ScenePicker>
     _SceneKind.forest => MemoTheme.forest,
     _SceneKind.ocean => MemoTheme.ocean,
     _SceneKind.space => MemoTheme.space,
+    _SceneKind.rain => MemoTheme.rain,
+    _SceneKind.fire => MemoTheme.fire,
   };
 
   Color get _canvas => switch (_kind) {
@@ -97,6 +109,8 @@ class _ScenePickerState extends State<_ScenePicker>
     _SceneKind.forest => ForestPalette.canvas,
     _SceneKind.ocean => OceanPalette.canvas,
     _SceneKind.space => SpacePalette.canvas,
+    _SceneKind.rain => RainPalette.canvas,
+    _SceneKind.fire => FirePalette.canvas,
   };
 
   @override
@@ -144,6 +158,8 @@ class _ScenePickerState extends State<_ScenePicker>
       MemoTheme.forest => _SceneKind.forest,
       MemoTheme.ocean => _SceneKind.ocean,
       MemoTheme.space => _SceneKind.space,
+      MemoTheme.rain => _SceneKind.rain,
+      MemoTheme.fire => _SceneKind.fire,
     };
 
     if (_isLocked(kind)) {
@@ -254,17 +270,61 @@ class _ScenePickerState extends State<_ScenePicker>
   bool _isLocked(_SceneKind kind) =>
       (kind == _SceneKind.forest ||
           kind == _SceneKind.ocean ||
-          kind == _SceneKind.space) &&
+          kind == _SceneKind.space ||
+          kind == _SceneKind.rain ||
+          kind == _SceneKind.fire) &&
       !_isPlus;
 
-  String _gateReason(_SceneKind kind) {
-    final ended = _subscription.trialEnded ? '체험이 끝났어요. ' : '';
-    return switch (kind) {
-      _SceneKind.forest => '$ended숲은 Parallel Plus에서 함께 쉴 수 있어요.',
-      _SceneKind.ocean => '$ended바다는 Parallel Plus에서 함께 쉴 수 있어요.',
-      _SceneKind.space => '$ended별은 Parallel Plus에서 함께 쉴 수 있어요.',
-      _SceneKind.desert => '',
+  String _gateReason(_SceneKind kind) => switch (kind) {
+        _SceneKind.forest =>
+          subscriptionGateReason('숲은 Parallel Plus에서 함께 쉴 수 있어요.'),
+        _SceneKind.ocean =>
+          subscriptionGateReason('바다는 Parallel Plus에서 함께 쉴 수 있어요.'),
+        _SceneKind.space =>
+          subscriptionGateReason('별은 Parallel Plus에서 함께 쉴 수 있어요.'),
+        _SceneKind.rain =>
+          subscriptionGateReason('창공은 Parallel Plus에서 함께 쉴 수 있어요.'),
+        _SceneKind.fire =>
+          subscriptionGateReason('불멍은 Parallel Plus에서 함께 쉴 수 있어요.'),
+        _SceneKind.desert => '',
+      };
+
+  Future<void> _openSettings() async {
+    if (_welcome.awaitsNatureSettingsTap) _welcome.onNatureTried();
+    await showSettingsSheet(
+      context,
+      onNatureVolume: () => unawaited(_showNatureVolumeSheet()),
+      onReplayWelcome: () => unawaited(_welcome.replay()),
+    );
+  }
+
+  Future<void> _openThemeGrid() async {
+    if (_welcome.awaitsPlacesTap) _welcome.onPlacesOpened();
+    final picked = await showThemeGridSheet(
+      context,
+      current: _memoTheme,
+      isLocked: (theme) {
+        final kind = switch (theme) {
+          MemoTheme.desert => _SceneKind.desert,
+          MemoTheme.forest => _SceneKind.forest,
+          MemoTheme.ocean => _SceneKind.ocean,
+          MemoTheme.space => _SceneKind.space,
+          MemoTheme.rain => _SceneKind.rain,
+          MemoTheme.fire => _SceneKind.fire,
+        };
+        return _isLocked(kind);
+      },
+    );
+    if (!mounted || picked == null) return;
+    final kind = switch (picked) {
+      MemoTheme.desert => _SceneKind.desert,
+      MemoTheme.forest => _SceneKind.forest,
+      MemoTheme.ocean => _SceneKind.ocean,
+      MemoTheme.space => _SceneKind.space,
+      MemoTheme.rain => _SceneKind.rain,
+      MemoTheme.fire => _SceneKind.fire,
     };
+    await _selectScene(kind);
   }
 
   Future<void> _selectScene(_SceneKind kind) async {
@@ -285,6 +345,8 @@ class _ScenePickerState extends State<_ScenePicker>
         _SceneKind.forest => MemoTheme.forest,
         _SceneKind.ocean => MemoTheme.ocean,
         _SceneKind.space => MemoTheme.space,
+        _SceneKind.rain => MemoTheme.rain,
+        _SceneKind.fire => MemoTheme.fire,
       };
       _presenceCount = AmbientPresence.display(live: 1, theme: theme);
     });
@@ -349,13 +411,14 @@ class _ScenePickerState extends State<_ScenePicker>
   }
 
   Future<void> _showNatureVolumeSheet() async {
-    final guidingNature = _welcome.awaitsNatureLongPress;
     final scene = _ambience;
     final label = switch (_kind) {
       _SceneKind.desert => '사막',
       _SceneKind.forest => '숲',
       _SceneKind.ocean => '바다',
       _SceneKind.space => '별',
+      _SceneKind.rain => '창공',
+      _SceneKind.fire => '불멍',
     };
     final isSilentTheme = scene == AmbienceScene.space;
     var gain = _audio.natureGain(scene);
@@ -377,7 +440,7 @@ class _ScenePickerState extends State<_ScenePicker>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '자연 소리 · $label',
+                      '배경 소리 · $label',
                       style: TextStyle(
                         fontFamily: 'Georgia',
                         fontSize: 16,
@@ -388,7 +451,7 @@ class _ScenePickerState extends State<_ScenePicker>
                     const SizedBox(height: 8),
                     Text(
                       isSilentTheme
-                          ? '별 테마는 자연 소리 없이 고요하게 두어요'
+                          ? '별 테마는 배경 소리 없이 고요하게 두어요'
                           : '이 테마에만 적용돼요',
                       style: TextStyle(
                         fontSize: 12,
@@ -444,8 +507,6 @@ class _ScenePickerState extends State<_ScenePicker>
         );
       },
     );
-
-    if (guidingNature) _welcome.onNatureTried();
   }
 
   @override
@@ -484,10 +545,14 @@ class _ScenePickerState extends State<_ScenePicker>
     _SceneKind.forest => ForestScene(presenceCount: _presenceCount),
     _SceneKind.ocean => OceanScene(presenceCount: _presenceCount),
     _SceneKind.space => StarScene(presenceCount: _presenceCount),
+    _SceneKind.rain => RainScene(presenceCount: _presenceCount),
+    _SceneKind.fire => FireScene(presenceCount: _presenceCount),
   };
 
   @override
   Widget build(BuildContext context) {
+    final chrome = Colors.white.withValues(alpha: 0.88);
+
     return WelcomeScope(
       host: _welcome,
       child: Scaffold(
@@ -498,73 +563,45 @@ class _ScenePickerState extends State<_ScenePicker>
             _sceneBody(),
             SafeArea(
               child: Align(
-                alignment: Alignment.topRight,
+                alignment: Alignment.topLeft,
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 14, 0),
-                  child: KeyedSubtree(
-                    key: _musicBarKey,
-                    child: _ThemeMusicBar(
-                      titleKey: _musicTitleKey,
-                      title: _audio.songTitle ?? 'Music',
-                      playing: _musicOn,
-                      onPrev: _playPreviousTrack,
-                      onPlayPause: _toggleMusic,
-                      onNext: _playNextTrack,
-                      onTitleLongPress: _showNatureVolumeSheet,
-                    ),
+                  padding: const EdgeInsets.fromLTRB(14, 10, 12, 0),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      KeyedSubtree(
+                        key: _settingsKey,
+                        child: _SettingsButton(
+                          color: chrome,
+                          onTap: () => unawaited(_openSettings()),
+                        ),
+                      ),
+                      KeyedSubtree(
+                        key: _placesKey,
+                        child: _PlacesGridButton(
+                          color: chrome,
+                          onTap: () => unawaited(_openThemeGrid()),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
             SafeArea(
               child: Align(
-                alignment: Alignment.bottomCenter,
+                alignment: Alignment.topRight,
                 child: Padding(
-                  padding: const EdgeInsets.only(bottom: 28),
+                  padding: const EdgeInsets.fromLTRB(12, 10, 14, 0),
                   child: KeyedSubtree(
-                    key: _themeBarKey,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.28),
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(4),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _Chip(
-                              label: '사막',
-                              selected: _kind == _SceneKind.desert,
-                              onTap: () => _selectScene(_SceneKind.desert),
-                            ),
-                            _Chip(
-                              label: '숲',
-                              selected: _kind == _SceneKind.forest,
-                              locked: !_isPlus,
-                              onTap: () => _selectScene(_SceneKind.forest),
-                            ),
-                            _Chip(
-                              label: '바다',
-                              selected: _kind == _SceneKind.ocean,
-                              locked: !_isPlus,
-                              onTap: () => _selectScene(_SceneKind.ocean),
-                            ),
-                            _Chip(
-                              label: '별',
-                              selected: _kind == _SceneKind.space,
-                              locked: !_isPlus,
-                              onTap: () => _selectScene(_SceneKind.space),
-                            ),
-                            // Temporary subscription test entry — remove later.
-                            // Long-press replays the welcome guide.
-                            _DebugSubButton(
-                              onTap: () => showSubscriptionDebugSheet(context),
-                              onLongPress: () => unawaited(_welcome.replay()),
-                            ),
-                          ],
-                        ),
-                      ),
+                    key: _musicBarKey,
+                    child: _ThemeMusicBar(
+                      color: chrome,
+                      title: _audio.songTitle ?? 'Music',
+                      playing: _musicOn,
+                      onPrev: _playPreviousTrack,
+                      onPlayPause: _toggleMusic,
+                      onNext: _playNextTrack,
                     ),
                   ),
                 ),
@@ -574,10 +611,56 @@ class _ScenePickerState extends State<_ScenePicker>
               WelcomeOverlay(
                 host: _welcome,
                 musicKey: _musicBarKey,
-                musicTitleKey: _musicTitleKey,
-                placesKey: _themeBarKey,
+                settingsKey: _settingsKey,
+                placesKey: _placesKey,
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsButton extends StatelessWidget {
+  const _SettingsButton({required this.onTap, required this.color});
+
+  final VoidCallback onTap;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Icon(
+          Icons.settings_outlined,
+          size: 20,
+          color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _PlacesGridButton extends StatelessWidget {
+  const _PlacesGridButton({required this.onTap, required this.color});
+
+  final VoidCallback onTap;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+        child: Icon(
+          Icons.map_outlined,
+          size: 20,
+          color: color,
         ),
       ),
     );
@@ -591,8 +674,7 @@ class _ThemeMusicBar extends StatelessWidget {
     required this.onPrev,
     required this.onPlayPause,
     required this.onNext,
-    this.onTitleLongPress,
-    this.titleKey,
+    required this.color,
   });
 
   final String title;
@@ -600,50 +682,44 @@ class _ThemeMusicBar extends StatelessWidget {
   final VoidCallback onPrev;
   final VoidCallback onPlayPause;
   final VoidCallback onNext;
-  final VoidCallback? onTitleLongPress;
-  final Key? titleKey;
-
-  static const _white = Color(0xEEFFFFFF);
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.music_note_rounded, size: 15, color: _white),
+        Icon(Icons.music_note_rounded, size: 15, color: color),
         const SizedBox(width: 5),
-        GestureDetector(
-          onLongPress: onTitleLongPress,
-          child: KeyedSubtree(
-            key: titleKey,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 140),
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: _white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                  letterSpacing: 0.3,
-                  decoration: TextDecoration.none,
-                ),
-              ),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 140),
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
+              letterSpacing: 0.3,
+              decoration: TextDecoration.none,
             ),
           ),
         ),
         const SizedBox(width: 2),
         _MusicIconButton(
           icon: Icons.skip_previous_rounded,
+          color: color,
           onTap: onPrev,
         ),
         _MusicIconButton(
           icon: playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+          color: color,
           onTap: onPlayPause,
         ),
         _MusicIconButton(
           icon: Icons.skip_next_rounded,
+          color: color,
           onTap: onNext,
         ),
       ],
@@ -652,10 +728,15 @@ class _ThemeMusicBar extends StatelessWidget {
 }
 
 class _MusicIconButton extends StatelessWidget {
-  const _MusicIconButton({required this.icon, required this.onTap});
+  const _MusicIconButton({
+    required this.icon,
+    required this.onTap,
+    required this.color,
+  });
 
   final IconData icon;
   final VoidCallback onTap;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
@@ -664,92 +745,9 @@ class _MusicIconButton extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-        child: Icon(icon, size: 22, color: const Color(0xEEFFFFFF)),
+        child: Icon(icon, size: 22, color: color),
       ),
     );
   }
 }
 
-class _DebugSubButton extends StatelessWidget {
-  const _DebugSubButton({
-    required this.onTap,
-    this.onLongPress,
-  });
-
-  final VoidCallback onTap;
-  final VoidCallback? onLongPress;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Icon(
-          Icons.workspace_premium_rounded,
-          size: 18,
-          color: Colors.white.withValues(alpha: 0.85),
-        ),
-      ),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  const _Chip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    this.locked = false,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final bool locked;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-        decoration: BoxDecoration(
-          color: selected
-              ? Colors.white.withValues(alpha: 0.92)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontFamily: 'Georgia',
-                fontSize: 14,
-                fontWeight: FontWeight.w400,
-                letterSpacing: 2,
-                color: selected
-                    ? const Color(0xFF2A2A2A)
-                    : Colors.white.withValues(alpha: locked ? 0.55 : 0.85),
-              ),
-            ),
-            if (locked) ...[
-              const SizedBox(width: 6),
-              Icon(
-                Icons.lock_outline_rounded,
-                size: 14,
-                color: Colors.white.withValues(alpha: 0.55),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}

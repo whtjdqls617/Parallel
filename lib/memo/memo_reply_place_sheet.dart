@@ -86,21 +86,21 @@ class _ReplyPlaceBodyState extends State<_ReplyPlaceBody> {
     final ink = cool
         ? (theme == MemoTheme.space
             ? const Color(0xFFD8DCE8)
-            : theme == MemoTheme.ocean
+            : theme == MemoTheme.ocean || theme == MemoTheme.rain
                 ? const Color(0xFFD8E4E8)
                 : const Color(0xFFE8DCC8))
         : const Color(0xFF4A3018);
     final board = cool
         ? (theme == MemoTheme.space
             ? const Color(0xFF12182A)
-            : theme == MemoTheme.ocean
+            : theme == MemoTheme.ocean || theme == MemoTheme.rain
                 ? const Color(0xFF1A2830)
                 : const Color(0xFF1A2820))
         : const Color(0xFFE8C898);
     final letter = cool
         ? (theme == MemoTheme.space
             ? const Color(0xFFDCE0EC)
-            : theme == MemoTheme.ocean
+            : theme == MemoTheme.ocean || theme == MemoTheme.rain
                 ? const Color(0xFFE4ECF0)
                 : const Color(0xFFE4E8D8))
         : const Color(0xFFF8EBD4);

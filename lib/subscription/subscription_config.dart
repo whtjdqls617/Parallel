@@ -21,4 +21,10 @@ class SubscriptionConfig {
 
   /// Full Parallel Plus access from first open, before paywall.
   static const trialDuration = Duration(days: 7);
+
+  /// Free-tier memos per local calendar day (KST). Plus = unlimited.
+  static const freeMemosPerDay = 1;
+
+  /// Shared Plus benefit line (settings + gate).
+  static const plusBenefitsLine = '더 많은 장소 · 흔적 무제한 · 테마 음악';
 }

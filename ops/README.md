@@ -30,7 +30,8 @@ cd /Users/seocho/Projects/Parallel/ops
 
 (Node 18+ 있으면 `npm install && npm run admin:node` 도 가능)
 
-- 위: 글 올리기 (테마 / 글 / 곡 / 가수)
+- 위: **스토어 버전** (iOS/Android 따로 · 스토어 반영 확인 후 DB 올리기 → major/minor면 강제 업데이트)
+- 그다음: 글 올리기 (테마 / 글 / 곡 / 가수)
 - 아래: 살아 있는 글 목록 → **이 글에 답장** 누르면 id 채워짐 → 위로 쓰기
 - **localhost만** 열려 있어요. 인터넷에 공개하지 마세요.
 
@@ -65,7 +66,7 @@ cd /Users/seocho/Projects/Parallel/ops
 
 | 필드 | 설명 | 제한 |
 |------|------|------|
-| `theme` | `desert` / `forest` / `ocean` / `space`(별) | 필수 |
+| `theme` | `desert` / `forest` / `ocean` / `space`(별) / `rain`(창공) / `fire`(불멍) | 필수 |
 | `text` | 본문 | 1~80자 |
 | `song` / `artist` | 없으면 `""` | ≤40자 |
 

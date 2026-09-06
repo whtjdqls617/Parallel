@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../notify/push_service.dart';
 import 'memo.dart';
 
 /// Tracks which reply sets on *my* memos I've already opened.
@@ -65,6 +66,15 @@ class MemoReplyInbox {
       _seen[memo.id] = signature(memo);
     }
     await _persist();
+    // Push always sets badge:1 — clear once the guest has opened that trace.
+    await PushService.instance.clearAppBadge();
+  }
+
+  /// Clear the icon badge when there is nothing left to check.
+  Future<void> clearBadgeIfCaughtUp(Iterable<Memo> pool, String? uid) async {
+    await ensureLoaded();
+    if (anyUnread(pool, uid)) return;
+    await PushService.instance.clearAppBadge();
   }
 
   Future<void> _persist() async {

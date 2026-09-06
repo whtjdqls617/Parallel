@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import UserNotifications
 import FirebaseCore
 import FirebaseMessaging
 
@@ -19,6 +20,34 @@ import FirebaseMessaging
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    let messenger = engineBridge.applicationRegistrar.messenger()
+    let channel = FlutterMethodChannel(
+      name: "parallel/badge",
+      binaryMessenger: messenger
+    )
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "clear" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+      if #available(iOS 16.0, *) {
+        UNUserNotificationCenter.current().setBadgeCount(0) { error in
+          if let error {
+            result(FlutterError(
+              code: "badge",
+              message: error.localizedDescription,
+              details: nil
+            ))
+          } else {
+            result(nil)
+          }
+        }
+      } else {
+        UIApplication.shared.applicationIconBadgeNumber = 0
+        result(nil)
+      }
+    }
   }
 
   override func application(

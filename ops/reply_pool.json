@@ -1,125 +1,68 @@
 {
-  "_comment": "moods: tired|lonely|hard|rest|okay|night|place|song|any. 원문 키워드로 골라짐.",
+  "_comment": "moods: tired|lonely|hard|rest|okay|night|place|song|any. song mood ONLY when memo has a song.",
   "entries": [
-    {
-      "moods": ["tired"],
-      "text": "오늘 좀 길었나 봐요. 몸부터 좀 풀어요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["tired"],
-      "text": "그 피곤함, 글에 다 묻어 있네요. 쉬엄쉬엄 해요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["tired", "hard"],
-      "text": "힘들었나 보다… 일단 여기 앉아 있어도 돼요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["lonely"],
-      "text": "혼자인 밤 있잖아요. 저도 가끔 그래요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["lonely"],
-      "text": "그 말 읽으니까, 옆자리가 좀 덜 빈 느낌이에요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["hard"],
-      "text": "마음이 좀 무거웠나 봐요. 여기선 잠깐 내려놔도 돼요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["hard"],
-      "text": "그런 날 있지요. 오늘만큼은 스스로한테 좀 관대해져요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["rest"],
-      "text": "쉬고 있는 중이군요. 그거면 이미 잘한 거예요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["rest"],
-      "text": "잠깐 앉아 있는 그 시간, 저도 좋아해요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["okay"],
-      "text": "그 말, 괜히 마음이 놓이네요. 저도 읽었어요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["okay"],
-      "text": "따뜻하게 남았네요. 여기까지 잘 왔어요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["night"],
-      "text": "같은 밤인가 봐요. 저도 아직 안 잤어요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["night"],
-      "text": "밤에 남긴 글이라 그런가, 더 가까이 느껴지네요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["place"],
-      "text": "그 장면이 눈에 그려지네요. 잠시 같이 있을게요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["place"],
-      "text": "거기 분위기, 글만 읽어도 좀 전해져요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["song"],
-      "text": "그 노래 고른 거, 분위기랑 잘 맞네요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["song"],
-      "text": "곡까지 남겨 둔 거 좋았어요. 귀에 남을 것 같아요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["any"],
-      "text": "읽었어요. 남겨 준 말, 마음에 좀 남네요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["any"],
-      "text": "그냥 지나다 봤는데, 괜히 고개가 끄덕여졌어요.",
-      "song": "",
-      "artist": ""
-    },
-    {
-      "moods": ["any"],
-      "text": "그 말 듣고 가려요. 오늘도 수고했어요.",
-      "song": "",
-      "artist": ""
-    }
+    {"moods": ["tired"], "text": "오늘 좀 길었나 보다. 몸부터 좀 풀자."},
+    {"moods": ["tired"], "text": "그 피곤함, 글에 다 묻어 있네요. 쉬엄쉬엄 해요."},
+    {"moods": ["tired"], "text": "야, 진짜 힘들었구나. 일단 여기 앉아 있어."},
+    {"moods": ["tired", "hard"], "text": "힘들었나 보다… 일단 여기 앉아 있어도 돼."},
+    {"moods": ["tired"], "text": "긴 하루였지. 오늘은 더 안 해도 돼요."},
+
+    {"moods": ["lonely"], "text": "혼자인 밤 있잖아. 나도 가끔 그래."},
+    {"moods": ["lonely"], "text": "그 말 읽으니까, 옆자리가 좀 덜 빈 느낌이에요."},
+    {"moods": ["lonely"], "text": "외로운 거, 숨기지 않아도 돼. 여기 있어."},
+    {"moods": ["lonely"], "text": "아무도 없는 밤 같지. 그래도 이 글은 읽혔어요."},
+
+    {"moods": ["hard"], "text": "마음이 좀 무거웠나 봐요. 여기선 잠깐 내려놔도 돼요."},
+    {"moods": ["hard"], "text": "그런 날 있지. 오늘만큼은 스스로한테 좀 관대하자."},
+    {"moods": ["hard"], "text": "울컥해도 괜찮아. 억지로 참지 마."},
+    {"moods": ["hard"], "text": "그 무게, 혼자 다 들지 않아도 돼요."},
+
+    {"moods": ["rest"], "text": "쉬고 있는 중이군. 그거면 이미 잘한 거야."},
+    {"moods": ["rest"], "text": "잠깐 앉아 있는 그 시간, 저도 좋아해요."},
+    {"moods": ["rest"], "text": "아무것도 안 해도 되는 자리라서 좋지."},
+    {"moods": ["rest"], "text": "한숨 돌리는 중이죠? 천천히 가요."},
+
+    {"moods": ["okay"], "text": "그 말, 괜히 마음이 놓이네. 나도 읽었어."},
+    {"moods": ["okay"], "text": "따뜻하게 남았네요. 여기까지 잘 왔어요."},
+    {"moods": ["okay"], "text": "고맙다는 말, 나도 받아서 기분 좋다."},
+    {"moods": ["okay"], "text": "그 다행한 마음, 여기에도 좀 묻어 있네요."},
+    {"moods": ["okay"], "text": "좋아. 그런 밤이 있다는 것만으로도."},
+
+    {"moods": ["night"], "text": "같은 밤인가 봐. 나도 아직 안 잤어."},
+    {"moods": ["night"], "text": "밤에 남긴 글이라 그런가, 더 가까이 느껴지네요."},
+    {"moods": ["night"], "text": "새벽 감성이다… 천천히 들어가."},
+    {"moods": ["night"], "text": "오늘 밤도 여기까지 온 거, 수고했어요."},
+
+    {"moods": ["place"], "text": "그 장면이 눈에 그려지네. 잠시 같이 있을게."},
+    {"moods": ["place"], "text": "거기 분위기, 글만 읽어도 좀 전해져요."},
+    {"moods": ["place", "rest"], "text": "그 온기, 글만 읽어도 전해지네."},
+    {"moods": ["place", "rest"], "text": "불 앞에서 쉬는 그 시간, 저도 좋아해요."},
+    {"moods": ["place", "okay"], "text": "따뜻하게 남아 있어서 좋다. 잘 쉬고 가."},
+    {"moods": ["place", "night"], "text": "같은 불빛 아래 있는 느낌이에요. 편히 있어요."},
+    {"moods": ["place"], "text": "장작 소리 기다리는 그 말, 괜히 미소 나네."},
+    {"moods": ["place", "rest"], "text": "그 조용한 따뜻함, 같이 앉아 있는 기분이에요."},
+    {"moods": ["place", "okay"], "text": "온정 있는 자리 맞지. 발걸음이 느려지지."},
+    {"moods": ["place"], "text": "벽난로 앞 그 숨, 여기서도 느껴져요."},
+
+    {"moods": ["song"], "text": "그 노래 고른 거, 분위기랑 잘 맞네."},
+    {"moods": ["song"], "text": "곡까지 남겨 둔 거 좋았어요. 귀에 남을 것 같아요."},
+    {"moods": ["song"], "text": "그 곡 고른 센스… 지금 기분에 딱이다."},
+    {"moods": ["song"], "text": "노래까지 남겨 줘서, 말이 더 오래 남네요."},
+
+    {"moods": ["any"], "text": "읽었어. 남겨 준 말, 마음에 좀 남네."},
+    {"moods": ["any"], "text": "그냥 지나다 봤는데, 괜히 고개가 끄덕여졌어요."},
+    {"moods": ["any"], "text": "그 말 듣고 갈게. 오늘도 수고했어."},
+    {"moods": ["any"], "text": "남겨 줘서 고마워요. 온기가 남았네요."},
+    {"moods": ["any"], "text": "오, 이런 말 필요했어. 잘 읽었어."},
+    {"moods": ["any"], "text": "짧게 남겨도 충분해요. 닿았어요."},
+    {"moods": ["any"], "text": "음… 괜히 마음이 따뜻해진다."},
+    {"moods": ["any"], "text": "그 한 줄, 오늘 제일 조용한 위로네요."},
+    {"moods": ["any"], "text": "나도 여기 있었어. 같이 숨 고르자."},
+    {"moods": ["any"], "text": "말이 짧아도 깊어요. 잘 받아 갈게요."},
+    {"moods": ["rest", "okay"], "text": "몸 녹인 거면 이미 잘한 하루야."},
+    {"moods": ["okay", "night"], "text": "따뜻한 끝이 있어서 다행이다. 나도 읽었어."},
+    {"moods": ["okay", "rest"], "text": "그 감사한 마음, 여기에도 좀 남겨두고 갈게요."},
+    {"moods": ["lonely", "place"], "text": "혼자가 아닌 그 느낌, 저도 가끔 여기서 느껴요."},
+    {"moods": ["hard", "okay"], "text": "울컥한 마음도 여기선 괜찮아. 따뜻하게 있어."}
   ]
 }

@@ -22,7 +22,7 @@ const publicDir = join(__dir, 'admin-public');
 const PORT = Number(process.env.PORT || 8787);
 const HOST = '127.0.0.1';
 
-const THEMES = new Set(['desert', 'forest', 'ocean', 'space']);
+const THEMES = new Set(['desert', 'forest', 'ocean', 'space', 'rain', 'fire']);
 const MAX_TEXT = 80;
 const MAX_ARTIST = 40;
 const MAX_SONG = 40;
@@ -54,9 +54,22 @@ function pick(list) {
 }
 
 function randomAnchor() {
+  const band = Math.random();
+  if (band < 0.45) {
+    return {
+      x: Number((0.08 + Math.random() * 0.78).toFixed(3)),
+      y: Number((0.58 + Math.random() * 0.32).toFixed(3)),
+    };
+  }
+  if (band < 0.75) {
+    return {
+      x: Number((0.62 + Math.random() * 0.28).toFixed(3)),
+      y: Number((0.36 + Math.random() * 0.52).toFixed(3)),
+    };
+  }
   return {
-    x: Number((0.35 + Math.random() * 0.4).toFixed(3)),
-    y: Number((0.45 + Math.random() * 0.35).toFixed(3)),
+    x: Number((0.12 + Math.random() * 0.70).toFixed(3)),
+    y: Number((0.48 + Math.random() * 0.40).toFixed(3)),
   };
 }
 
@@ -165,7 +178,7 @@ async function postMemo(db, body) {
   const text = clampStr(body.text, MAX_TEXT);
   const song = clampStr(body.song, MAX_SONG);
   const artist = clampStr(body.artist, MAX_ARTIST);
-  if (!THEMES.has(theme)) throw new Error('theme must be desert|forest|ocean|space');
+  if (!THEMES.has(theme)) throw new Error('theme must be desert|forest|ocean|space|rain|fire');
   if (!text) throw new Error('text is required');
 
   const now = new Date();
@@ -226,6 +239,78 @@ async function postReply(db, body) {
   return { memoId, uid, text, song, artist, theme: data.theme };
 }
 
+const VERSION_DOC = 'config/appVersion';
+const VERSION_RE = /^(\d+)\.(\d+)(?:\.(\d+))?$/;
+const DEFAULT_ANDROID_STORE =
+  'https://play.google.com/store/apps/details?id=com.parallel.android';
+const DEFAULT_IOS_STORE = 'https://apps.apple.com/app/id0000000000';
+
+function normalizeVersion(raw) {
+  const text = String(raw ?? '').trim();
+  const m = text.match(VERSION_RE);
+  if (!m) throw new Error('version must look like 1.2.3 (major.minor.patch)');
+  return `${m[1]}.${m[2]}.${m[3] || '0'}`;
+}
+
+async function getAppVersion(db) {
+  const ref = db.doc(VERSION_DOC);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    const payload = {
+      ios: '1.0.0',
+      android: '1.0.0',
+      iosStoreUrl: DEFAULT_IOS_STORE,
+      androidStoreUrl: DEFAULT_ANDROID_STORE,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    await ref.set(payload);
+    return {
+      ios: '1.0.0',
+      android: '1.0.0',
+      iosStoreUrl: DEFAULT_IOS_STORE,
+      androidStoreUrl: DEFAULT_ANDROID_STORE,
+    };
+  }
+  const data = snap.data() || {};
+  return {
+    ios: data.ios || '1.0.0',
+    android: data.android || '1.0.0',
+    iosStoreUrl: data.iosStoreUrl || DEFAULT_IOS_STORE,
+    androidStoreUrl: data.androidStoreUrl || DEFAULT_ANDROID_STORE,
+  };
+}
+
+async function setAppVersion(db, body) {
+  const current = await getAppVersion(db);
+  const nextIos =
+    body.ios != null && String(body.ios).trim() !== ''
+      ? normalizeVersion(body.ios)
+      : current.ios;
+  const nextAndroid =
+    body.android != null && String(body.android).trim() !== ''
+      ? normalizeVersion(body.android)
+      : current.android;
+  const iosStoreUrl =
+    String(body.iosStoreUrl || current.iosStoreUrl).trim() || DEFAULT_IOS_STORE;
+  const androidStoreUrl =
+    String(body.androidStoreUrl || current.androidStoreUrl).trim() ||
+    DEFAULT_ANDROID_STORE;
+  const payload = {
+    ios: nextIos,
+    android: nextAndroid,
+    iosStoreUrl,
+    androidStoreUrl,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  await db.doc(VERSION_DOC).set(payload, { merge: true });
+  return {
+    ios: nextIos,
+    android: nextAndroid,
+    iosStoreUrl,
+    androidStoreUrl,
+  };
+}
+
 async function main() {
   const keyPath = findServiceAccountPath();
   if (!keyPath) {
@@ -251,6 +336,11 @@ async function main() {
         return json(res, 200, { memos });
       }
 
+      if (req.method === 'GET' && pathname === '/api/version') {
+        const version = await getAppVersion(db);
+        return json(res, 200, { version });
+      }
+
       if (req.method === 'POST' && pathname === '/api/memos') {
         const body = await readBody(req);
         const posted = await postMemo(db, body);
@@ -261,6 +351,12 @@ async function main() {
         const body = await readBody(req);
         const posted = await postReply(db, body);
         return json(res, 200, { ok: true, posted });
+      }
+
+      if (req.method === 'POST' && pathname === '/api/version') {
+        const body = await readBody(req);
+        const version = await setAppVersion(db, body);
+        return json(res, 200, { ok: true, version });
       }
 
       if (req.method === 'GET') {

@@ -15,6 +15,7 @@ class DesertPainter extends CustomPainter {
     this.sandCount = 0,
     this.sandReveal = 1,
     this.sandErase = 0,
+    this.showPresence = true,
   });
 
   /// Continuous elapsed time in seconds.
@@ -31,6 +32,9 @@ class DesertPainter extends CustomPainter {
 
   /// 0 → 1 how far a finger has wiped the old mark away.
   final double sandErase;
+
+  /// When false, skip companion sparks / sand presence (theme grid thumbs).
+  final bool showPresence;
 
   /// Shared lullaby period — scene and count breathe together.
   static const breathPeriod = 5.5;
@@ -124,11 +128,15 @@ class DesertPainter extends CustomPainter {
     _paintWindRipples(canvas, size, wind: wind);
     _paintGroundPerspectiveWash(canvas, size, vanish: vanish);
     _paintFootprints(canvas, size, vanish: vanish);
-    _paintPresenceInSand(canvas, size, breath: breath);
+    if (showPresence) {
+      _paintPresenceInSand(canvas, size, breath: breath);
+    }
     _paintDust(canvas, size, wind, vanish: vanish);
 
     // Companions — soft sparks across the hollow, center and sides.
-    _paintPresenceSpirits(canvas, size, breath: breath);
+    if (showPresence) {
+      _paintPresenceSpirits(canvas, size, breath: breath);
+    }
 
     _paintComfortGlow(canvas, size, breath);
     _paintVignette(canvas, size, breath);
@@ -1374,7 +1382,8 @@ class DesertPainter extends CustomPainter {
       oldDelegate.presenceCount != presenceCount ||
       oldDelegate.sandCount != sandCount ||
       oldDelegate.sandReveal != sandReveal ||
-      oldDelegate.sandErase != sandErase;
+      oldDelegate.sandErase != sandErase ||
+      oldDelegate.showPresence != showPresence;
 }
 
 enum DuneStyle { ridge, mid, near }

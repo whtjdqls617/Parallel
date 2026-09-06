@@ -16,12 +16,14 @@ enum WelcomeStep {
   nature,
   /// Guest may play their own music and keep resting.
   ownMusic,
+  /// Theme grid — pick another place (still starts in desert).
+  places,
   /// Parallel Plus opens more — not a forced theme tap.
   plus,
   farewell,
 }
 
-const _prefsKey = 'welcome_seen_v11';
+const _prefsKey = 'welcome_seen_v13';
 
 class WelcomeHost extends ChangeNotifier {
   WelcomeStep? _step;
@@ -42,7 +44,8 @@ class WelcomeHost extends ChangeNotifier {
 
   bool get awaitsBoardOpen => _step == WelcomeStep.board;
   bool get awaitsMusicTap => _step == WelcomeStep.music;
-  bool get awaitsNatureLongPress => _step == WelcomeStep.nature;
+  bool get awaitsNatureSettingsTap => _step == WelcomeStep.nature;
+  bool get awaitsPlacesTap => _step == WelcomeStep.places;
 
   bool get hideChrome =>
       _step == WelcomeStep.read || _step == WelcomeStep.compose;
@@ -84,7 +87,7 @@ class WelcomeHost extends ChangeNotifier {
     } else if (step == WelcomeStep.traces) {
       _go(WelcomeStep.music);
     } else if (step == WelcomeStep.ownMusic) {
-      _go(WelcomeStep.plus);
+      _go(WelcomeStep.places);
     } else if (step == WelcomeStep.plus) {
       _go(WelcomeStep.farewell);
     } else if (step == WelcomeStep.farewell) {
@@ -142,6 +145,11 @@ class WelcomeHost extends ChangeNotifier {
     _go(WelcomeStep.ownMusic);
   }
 
+  void onPlacesOpened() {
+    if (_step != WelcomeStep.places) return;
+    _go(WelcomeStep.plus);
+  }
+
   void _go(WelcomeStep next) {
     _step = next;
     notifyListeners();
@@ -179,6 +187,8 @@ class WelcomeHost extends ChangeNotifier {
       await prefs.remove('welcome_seen_v8');
       await prefs.remove('welcome_seen_v9');
       await prefs.remove('welcome_seen_v10');
+      await prefs.remove('welcome_seen_v11');
+      await prefs.remove('welcome_seen_v12');
     } catch (_) {}
     _boardPanelOpen = false;
     _shouldOffer = false;

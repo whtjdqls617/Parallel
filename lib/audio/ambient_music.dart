@@ -2,11 +2,12 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'theme_music_catalog.dart';
 
-enum AmbienceScene { desert, forest, ocean, space }
+enum AmbienceScene { desert, forest, ocean, space, rain, fire }
 
 /// Nature bed (on by default) + optional song, mixed together.
 ///
@@ -21,6 +22,8 @@ class AmbientMusic {
   static const forestNaturePath = 'audio/nature_forest.wav';
   static const oceanNaturePath = 'audio/nature_ocean.wav';
   static const spaceNaturePath = 'audio/nature_space.wav';
+  static const rainNaturePath = 'audio/nature_rain.wav'; // cabin drone (theme key: rain)
+  static const fireNaturePath = 'audio/nature_fire.wav';
 
   static const songVolume = 0.30;
   /// Nature beds need to cut through earphones + song.
@@ -32,9 +35,13 @@ class AmbientMusic {
   static const _forestBedLength = Duration(milliseconds: 25000);
   static const _oceanBedLength = Duration(milliseconds: 192000);
   static const _spaceBedLength = Duration(milliseconds: 28000);
+  static const _rainBedLength = Duration(milliseconds: 28000);
+  static const _fireBedLength = Duration(milliseconds: 25000);
 
   /// Overlap at the join — no hard stop (avoids desert crackle).
   static const _seamCrossfade = Duration(milliseconds: 1400);
+  /// Cabin drone: longer equal-power handoff — continuous bed, no tick.
+  static const _rainSeamCrossfade = Duration(milliseconds: 4000);
   /// Ocean: long equal-power handoff on quiet bed — never a hard cut.
   static const _oceanSeamCrossfade = Duration(milliseconds: 6000);
   static const _cycleMargin = Duration(milliseconds: 300);
@@ -42,6 +49,8 @@ class AmbientMusic {
   static const _fadeIn = Duration(milliseconds: 180);
   /// Ocean needs a longer ease so the bed never pops in/out.
   static const _oceanFadeIn = Duration(milliseconds: 700);
+  /// Cabin drone: slower ease so engine bed doesn't click on start.
+  static const _rainFadeIn = Duration(milliseconds: 900);
   static const _songCutFade = Duration(milliseconds: 280);
 
   static const _prefsPrefix = 'nature_gain_';
@@ -66,6 +75,8 @@ class AmbientMusic {
   bool _cycling = false;
   /// When true, finished tracks advance through the suite forever.
   bool _songSuiteActive = false;
+  /// True while swapping players — ignore complete events from pause/stop.
+  bool _songSwitching = false;
   Timer? _loopTimer;
   int _natureEpoch = 0;
 
@@ -92,6 +103,8 @@ class AmbientMusic {
     AmbienceScene.ocean: 1.0,
     // Stars: silence by default — open-field wind doesn't match the sky.
     AmbienceScene.space: 0.0,
+    AmbienceScene.rain: 1.0,
+    AmbienceScene.fire: 1.0,
   };
 
   bool _prefsLoaded = false;
@@ -168,6 +181,11 @@ class AmbientMusic {
     } else if (scene == AmbienceScene.space) {
       // Star theme is silence — no nature bed.
       calibrated = 0;
+    } else if (scene == AmbienceScene.rain) {
+      calibrated = base * 0.92;
+    } else if (scene == AmbienceScene.fire) {
+      // Wood pops need headroom over theme BGM; bed is sparse, not a hiss bed.
+      calibrated = (base * 1.15).clamp(0.0, 1.0);
     }
     final gain = scene == null ? 1.0 : natureGain(scene);
     return (calibrated * gain).clamp(0.0, 1.0);
@@ -177,17 +195,25 @@ class AmbientMusic {
   /// so the loop join never hard-cuts (ocean WAV is rest-aligned for a quiet fade).
   bool _usesNativeLoop(AmbienceScene scene) => false;
 
-  Duration _seamFor(AmbienceScene scene) =>
-      scene == AmbienceScene.ocean ? _oceanSeamCrossfade : _seamCrossfade;
+  Duration _seamFor(AmbienceScene scene) => switch (scene) {
+    AmbienceScene.ocean => _oceanSeamCrossfade,
+    AmbienceScene.rain => _rainSeamCrossfade,
+    _ => _seamCrossfade,
+  };
 
-  Duration _fadeInFor(AmbienceScene scene) =>
-      scene == AmbienceScene.ocean ? _oceanFadeIn : _fadeIn;
+  Duration _fadeInFor(AmbienceScene scene) => switch (scene) {
+    AmbienceScene.ocean => _oceanFadeIn,
+    AmbienceScene.rain => _rainFadeIn,
+    _ => _fadeIn,
+  };
 
   String _naturePath(AmbienceScene scene) => switch (scene) {
     AmbienceScene.desert => desertNaturePath,
     AmbienceScene.forest => forestNaturePath,
     AmbienceScene.ocean => oceanNaturePath,
     AmbienceScene.space => spaceNaturePath,
+    AmbienceScene.rain => rainNaturePath,
+    AmbienceScene.fire => fireNaturePath,
   };
 
   Duration _bedLength(AmbienceScene scene) => switch (scene) {
@@ -195,6 +221,8 @@ class AmbientMusic {
     AmbienceScene.forest => _forestBedLength,
     AmbienceScene.ocean => _oceanBedLength,
     AmbienceScene.space => _spaceBedLength,
+    AmbienceScene.rain => _rainBedLength,
+    AmbienceScene.fire => _fireBedLength,
   };
 
   Future<void> setScene(
@@ -369,7 +397,11 @@ class AmbientMusic {
       await incoming.play(AssetSource(path));
       if (_disposed || epoch != _natureEpoch) return;
 
-      final steps = scene == AmbienceScene.ocean ? 48 : 20;
+      final steps = switch (scene) {
+        AmbienceScene.ocean => 48,
+        AmbienceScene.rain => 36,
+        _ => 20,
+      };
       final frame = Duration(milliseconds: (ms / steps).round().clamp(20, 80));
       for (var i = 1; i <= steps; i++) {
         if (_disposed || epoch != _natureEpoch) return;
@@ -434,7 +466,7 @@ class AmbientMusic {
     await player.setReleaseMode(ReleaseMode.stop);
     await player.setVolume(0);
     final sub = player.onPlayerComplete.listen((_) {
-      if (_disposed || !_songSuiteActive) return;
+      if (_disposed || !_songSuiteActive || _songSwitching) return;
       if (!identical(player, _activeSong)) return;
       unawaited(_advanceSongSuite());
     });
@@ -450,15 +482,11 @@ class AmbientMusic {
       identical(active, _songA) ? _songB! : _songA!;
 
   Future<void> _advanceSongSuite() async {
-    if (_disposed || !_songSuiteActive) return;
+    if (_disposed || !_songSuiteActive || _songSwitching) return;
     final scene = _natureScene;
     if (scene == null) return;
     await _ensureSongTracks(scene);
-    if (_songTracks.isEmpty) {
-      _songStarted = false;
-      await playSong(forceReload: true);
-      return;
-    }
+    if (_songTracks.isEmpty) return;
     final next = (_songIndex + 1) % _songTracks.length;
     await _playTrackAt(next);
   }
@@ -488,21 +516,22 @@ class AmbientMusic {
 
     final scene = _natureScene;
     if (scene != null) {
+      if (forceReload) {
+        _songTracks = [];
+        _songTracksScene = null;
+        _catalog.clearCacheFor(scene);
+      }
       await _ensureSongTracks(scene);
     }
     if (_songTracks.isNotEmpty) {
-      await _playTrackAt(_songIndex.clamp(0, _songTracks.length - 1));
+      await _playTrackAt(_suiteStartIndex());
       return;
     }
 
-    // Local asset fallback — single looping bed.
-    await player.setReleaseMode(ReleaseMode.loop);
-    await player.setVolume(songVolume);
-    await player.play(AssetSource(songPath));
-    _songStarted = true;
-    _songSuiteActive = true;
-    _preloadedStem = null;
-    await _applyNatureVolume();
+    // No theme suite available — stay quiet (never play another theme's MR).
+    debugPrint('AmbientMusic: no suite tracks for $scene');
+    _songStarted = false;
+    _songSuiteActive = false;
     onSongChanged?.call();
   }
 
@@ -511,44 +540,51 @@ class AmbientMusic {
     await _ensureSongPlayers();
     final scene = _natureScene;
     if (scene != null) await _ensureSongTracks(scene);
-    if (_songTracks.isEmpty) {
-      await playSong(forceReload: true);
-      return;
-    }
+    if (_songTracks.isEmpty) return;
 
     _songIndex = index.clamp(0, _songTracks.length - 1);
     final track = _songTracks[_songIndex];
     final active = _activeSong!;
     final standby = _standbySong(active);
 
-    _songSuiteActive = true;
+    _songSwitching = true;
+    _songSuiteActive = false;
     await active.setReleaseMode(ReleaseMode.stop);
     await standby.setReleaseMode(ReleaseMode.stop);
 
-    // Instant handoff when the standby player already buffered this track.
-    if (_preloadedStem == track.fileStem) {
-      try {
-        await active.setVolume(0);
-        await active.pause();
-      } catch (_) {}
-      try {
-        await standby.seek(Duration.zero);
-      } catch (_) {}
+    try {
+      await active.setVolume(0);
+      await active.pause();
+    } catch (_) {}
+    try {
+      await standby.setVolume(0);
+      await standby.pause();
+    } catch (_) {}
+
+    try {
       await standby.setVolume(songVolume);
-      await standby.resume();
+      await standby.play(UrlSource(track.uri.toString()));
       _activeSong = standby;
       _preloadedStem = null;
-    } else {
-      await active.setVolume(songVolume);
-      await active.play(UrlSource(track.uri.toString()));
-      _activeSong = active;
-      _preloadedStem = null;
+      _songStarted = true;
+      _songSuiteActive = true;
+      debugPrint(
+        'AmbientMusic play [${_songIndex + 1}/${_songTracks.length}] '
+        '${track.fileStem}',
+      );
+      await _applyNatureVolume();
+      onSongChanged?.call();
+      unawaited(_preloadNeighbor());
+    } catch (e) {
+      debugPrint('AmbientMusic play failed ${track.fileStem}: $e');
+      _songStarted = false;
+      _songSuiteActive = false;
+      onSongChanged?.call();
+    } finally {
+      // Absorb late complete events from pause/stop during the swap.
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      _songSwitching = false;
     }
-
-    _songStarted = true;
-    await _applyNatureVolume();
-    onSongChanged?.call();
-    unawaited(_preloadNeighbor());
   }
 
   /// Warm the next track on the idle player so skips feel instant.
@@ -602,15 +638,27 @@ class AmbientMusic {
   }
 
   Future<void> _ensureSongTracks(AmbienceScene scene) async {
-    if (_songTracksScene == scene && _songTracks.isNotEmpty) return;
-    try {
-      _songTracks = await _catalog.tracksFor(scene);
-    } catch (_) {
-      _songTracks = [];
+    if (_songTracksScene != scene || _songTracks.isEmpty) {
+      try {
+        _catalog.clearCacheFor(scene);
+        _songTracks = await _catalog.tracksFor(scene);
+      } catch (e) {
+        debugPrint('AmbientMusic tracks load failed: $e');
+        _songTracks = [];
+      }
+      _songTracksScene = scene;
+      _songIndex = _suiteStartIndex();
+      _preloadedStem = null;
     }
-    _songTracksScene = scene;
-    _songIndex = 0;
-    _preloadedStem = null;
+  }
+
+  /// Index of vesper (or first track if vesper is missing).
+  int _suiteStartIndex() {
+    if (_songTracks.isEmpty) return 0;
+    final i = _songTracks.indexWhere(
+      (t) => ThemeMusicCatalog.suiteRank(t.fileStem) == 0,
+    );
+    return i >= 0 ? i : 0;
   }
 
   Future<void> pauseSong() async {

@@ -1,0 +1,6 @@
+// iOS App Store version — bump here (independent of Android).
+// MARKETING_VERSION = user-facing (1.2.3)
+// CURRENT_PROJECT_VERSION = build number (must increase every upload)
+MARKETING_VERSION=1.0.0
+CURRENT_PROJECT_VERSION=1
+IPHONEOS_DEPLOYMENT_TARGET=15.0

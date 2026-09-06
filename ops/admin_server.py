@@ -28,7 +28,7 @@ PUBLIC = ROOT / "admin-public"
 HOST = "127.0.0.1"
 PORT = 8787
 
-THEMES = {"desert", "forest", "ocean", "space"}
+THEMES = {"desert", "forest", "ocean", "space", "rain", "fire"}
 MAX_TEXT = 80
 MAX_ARTIST = 40
 MAX_SONG = 40
@@ -43,6 +43,13 @@ AMBIENT_UIDS = [
     "ambient_quiet",
     "ambient_lantern",
 ]
+
+VERSION_DOC = "config/appVersion"
+VERSION_RE = re.compile(r"^(\d+)\.(\d+)(?:\.(\d+))?$")
+DEFAULT_ANDROID_STORE = (
+    "https://play.google.com/store/apps/details?id=com.parallel.android"
+)
+DEFAULT_IOS_STORE = "https://apps.apple.com/app/id0000000000"
 
 
 def find_service_account() -> Path:
@@ -127,7 +134,7 @@ def post_memo(body: dict):
     song = clamp(body.get("song"), MAX_SONG)
     artist = clamp(body.get("artist"), MAX_ARTIST)
     if theme not in THEMES:
-        raise ValueError("theme must be desert|forest|ocean|space")
+        raise ValueError("theme must be desert|forest|ocean|space|rain|fire")
     if not text:
         raise ValueError("text is required")
 
@@ -202,6 +209,71 @@ def post_reply(body: dict):
     }
 
 
+def normalize_version(raw: str) -> str:
+    text = str(raw or "").strip()
+    m = VERSION_RE.match(text)
+    if not m:
+        raise ValueError("version must look like 1.2.3 (major.minor.patch)")
+    major, minor, patch = m.group(1), m.group(2), m.group(3) or "0"
+    return f"{major}.{minor}.{patch}"
+
+
+def get_app_version():
+    ref = DB.document(VERSION_DOC)
+    snap = ref.get()
+    if not snap.exists:
+        payload = {
+            "ios": "1.0.0",
+            "android": "1.0.0",
+            "iosStoreUrl": DEFAULT_IOS_STORE,
+            "androidStoreUrl": DEFAULT_ANDROID_STORE,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+        }
+        ref.set(payload)
+        return {
+            "ios": "1.0.0",
+            "android": "1.0.0",
+            "iosStoreUrl": DEFAULT_IOS_STORE,
+            "androidStoreUrl": DEFAULT_ANDROID_STORE,
+        }
+    data = snap.to_dict() or {}
+    return {
+        "ios": data.get("ios") or "1.0.0",
+        "android": data.get("android") or "1.0.0",
+        "iosStoreUrl": data.get("iosStoreUrl") or DEFAULT_IOS_STORE,
+        "androidStoreUrl": data.get("androidStoreUrl") or DEFAULT_ANDROID_STORE,
+    }
+
+
+def set_app_version(body: dict):
+    current = get_app_version()
+    next_ios = normalize_version(body["ios"]) if "ios" in body and body["ios"] not in (None, "") else current["ios"]
+    next_android = (
+        normalize_version(body["android"])
+        if "android" in body and body["android"] not in (None, "")
+        else current["android"]
+    )
+    ios_url = str(body.get("iosStoreUrl") or current["iosStoreUrl"]).strip() or DEFAULT_IOS_STORE
+    android_url = (
+        str(body.get("androidStoreUrl") or current["androidStoreUrl"]).strip()
+        or DEFAULT_ANDROID_STORE
+    )
+    payload = {
+        "ios": next_ios,
+        "android": next_android,
+        "iosStoreUrl": ios_url,
+        "androidStoreUrl": android_url,
+        "updatedAt": firestore.SERVER_TIMESTAMP,
+    }
+    DB.document(VERSION_DOC).set(payload, merge=True)
+    return {
+        "ios": next_ios,
+        "android": next_android,
+        "iosStoreUrl": ios_url,
+        "androidStoreUrl": android_url,
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         print("%s - %s" % (self.address_string(), fmt % args))
@@ -247,6 +319,9 @@ class Handler(BaseHTTPRequestHandler):
                 theme = (qs.get("theme") or [""])[0]
                 self._json(200, {"memos": list_memos(theme)})
                 return
+            if parsed.path == "/api/version":
+                self._json(200, {"version": get_app_version()})
+                return
             self._serve_static(parsed.path)
         except Exception as exc:
             traceback.print_exc()
@@ -261,6 +336,9 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if parsed.path == "/api/replies":
                 self._json(200, {"ok": True, "posted": post_reply(body)})
+                return
+            if parsed.path == "/api/version":
+                self._json(200, {"ok": True, "version": set_app_version(body)})
                 return
             self._json(404, {"error": "not found"})
         except Exception as exc:

@@ -91,13 +91,17 @@ class _MemoComposeBodyState extends State<_MemoComposeBody> {
       MemoTheme.forest => const Color(0xFF1A2820),
       MemoTheme.ocean => const Color(0xFF1A2830),
       MemoTheme.space => const Color(0xFF12182A),
+      MemoTheme.rain => const Color(0xFF1A2030),
       MemoTheme.desert => const Color(0xFFE8C898),
+      MemoTheme.fire => const Color(0xFF241810),
     };
     final ink = switch (widget.theme) {
       MemoTheme.forest => const Color(0xFFE8DCC8),
       MemoTheme.ocean => const Color(0xFFD8E4E8),
       MemoTheme.space => const Color(0xFFD8DCE8),
+      MemoTheme.rain => const Color(0xFFD0DCE8),
       MemoTheme.desert => const Color(0xFF4A3018),
+      MemoTheme.fire => const Color(0xFFE8D4B8),
     };
     final hint = ink.withValues(alpha: 0.4);
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
@@ -184,13 +188,17 @@ class _MemoComposeBodyState extends State<_MemoComposeBody> {
                         MemoTheme.forest => const Color(0xFF3A4A38),
                         MemoTheme.ocean => const Color(0xFF3A5460),
                         MemoTheme.space => const Color(0xFF3A4860),
+                        MemoTheme.rain => const Color(0xFF3A4858),
                         MemoTheme.desert => const Color(0xFF8A5A30),
+                        MemoTheme.fire => const Color(0xFFB86830),
                       },
                       foregroundColor: switch (widget.theme) {
                         MemoTheme.forest => const Color(0xFFE8DCC8),
                         MemoTheme.ocean => const Color(0xFFE0ECF0),
                         MemoTheme.space => const Color(0xFFE0E4F0),
+                        MemoTheme.rain => const Color(0xFFE0E8F0),
                         MemoTheme.desert => const Color(0xFFF3E6C8),
+                        MemoTheme.fire => const Color(0xFFFFF0D8),
                       },
                       padding: const EdgeInsets.symmetric(
                         horizontal: 18,

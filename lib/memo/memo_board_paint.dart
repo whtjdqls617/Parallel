@@ -20,14 +20,18 @@ abstract final class MemoBoardPaint {
         _paintOceanBoard(canvas, frame);
       case MemoTheme.space:
         _paintSpaceBoard(canvas, frame);
+      case MemoTheme.rain:
+        _paintRainBoard(canvas, frame);
+      case MemoTheme.fire:
+        _paintFireBoard(canvas, frame);
     }
     canvas.restore();
   }
 
-  static Rect _face(Rect frame) {
+  static Rect _face(Rect frame, MemoTheme theme) {
     final w = frame.width;
     final h = frame.height;
-    final f = MemoBoardLayout.faceInFrame;
+    final f = MemoBoardLayout.faceInFrameFor(theme);
     return Rect.fromLTRB(
       frame.left + f.left * w,
       frame.top + f.top * h,
@@ -39,7 +43,7 @@ abstract final class MemoBoardPaint {
   static void _paintDesertBoard(Canvas canvas, Rect frame) {
     final w = frame.width;
     final h = frame.height;
-    final face = _face(frame);
+    final face = _face(frame, MemoTheme.desert);
 
     // Opaque sand pile where posts enter
     canvas.drawOval(
@@ -116,7 +120,7 @@ abstract final class MemoBoardPaint {
   static void _paintForestBoard(Canvas canvas, Rect frame) {
     final w = frame.width;
     final h = frame.height;
-    final face = _face(frame);
+    final face = _face(frame, MemoTheme.forest);
 
     canvas.drawOval(
       Rect.fromCenter(
@@ -206,7 +210,7 @@ abstract final class MemoBoardPaint {
   static void _paintOceanBoard(Canvas canvas, Rect frame) {
     final w = frame.width;
     final h = frame.height;
-    final face = _face(frame);
+    final face = _face(frame, MemoTheme.ocean);
 
     // Wet sand mound.
     canvas.drawOval(
@@ -282,7 +286,7 @@ abstract final class MemoBoardPaint {
   static void _paintSpaceBoard(Canvas canvas, Rect frame) {
     final w = frame.width;
     final h = frame.height;
-    final face = _face(frame);
+    final face = _face(frame, MemoTheme.space);
 
     // Soft earth under the posts.
     canvas.drawOval(
@@ -353,5 +357,344 @@ abstract final class MemoBoardPaint {
         nail,
       );
     }
+  }
+
+  /// Cabin tray table with a small standing desk calendar on the right.
+  static void _paintRainBoard(Canvas canvas, Rect frame) {
+    final w = frame.width;
+    final h = frame.height;
+    final face = _face(frame, MemoTheme.rain);
+
+    // Long tray / side table under the window.
+    final tableTop = frame.top + h * 0.58;
+    final tableBottom = frame.bottom - h * 0.04;
+    final table = Path()
+      ..moveTo(frame.left + w * 0.02, tableTop)
+      ..lineTo(frame.right - w * 0.02, tableTop)
+      ..lineTo(frame.right - w * 0.01, tableBottom)
+      ..lineTo(frame.left + w * 0.01, tableBottom)
+      ..close();
+
+    // Soft contact shadow under the tray
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(frame.center.dx, tableBottom + h * 0.02),
+        width: w * 0.92,
+        height: h * 0.08,
+      ),
+      Paint()
+        ..color = const Color(0x44000000)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+    );
+
+    // Front apron
+    canvas.drawPath(
+      table,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset(frame.left, tableTop),
+          Offset(frame.left, tableBottom),
+          const [
+            Color(0xFF4A5460),
+            Color(0xFF3A4450),
+            Color(0xFF2A323C),
+          ],
+          const [0.0, 0.45, 1.0],
+        ),
+    );
+
+    // Top surface — lit from the window
+    final surface = RRect.fromRectAndRadius(
+      Rect.fromLTRB(
+        frame.left + w * 0.025,
+        tableTop - h * 0.04,
+        frame.right - w * 0.025,
+        tableTop + h * 0.06,
+      ),
+      const Radius.circular(3),
+    );
+    canvas.drawRRect(
+      surface,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset(frame.left, tableTop),
+          Offset(frame.right, tableTop),
+          const [
+            Color(0xFF6A7888),
+            Color(0xFF5A6878),
+            Color(0xFF485460),
+          ],
+          const [0.0, 0.4, 1.0],
+        ),
+    );
+    // Thin front lip highlight
+    canvas.drawLine(
+      Offset(frame.left + w * 0.04, tableTop - h * 0.01),
+      Offset(frame.right - w * 0.04, tableTop - h * 0.01),
+      Paint()
+        ..color = const Color(0x55A8B4C0)
+        ..strokeWidth = 1.1,
+    );
+
+    // Calendar cast shadow on the tray
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset(face.center.dx + w * 0.01, tableTop + h * 0.02),
+          width: face.width * 1.05,
+          height: h * 0.1,
+        ),
+        const Radius.circular(2),
+      ),
+      Paint()
+        ..color = const Color(0x55000000)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5),
+    );
+
+    // Plastic base / stand under the calendar
+    final base = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(face.center.dx, tableTop - h * 0.01),
+        width: face.width * 0.72,
+        height: h * 0.07,
+      ),
+      const Radius.circular(2),
+    );
+    canvas.drawRRect(base, Paint()..color = const Color(0xFF3A4450));
+    canvas.drawRRect(
+      base,
+      Paint()
+        ..color = const Color(0xFF5A6878)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8,
+    );
+
+    // Standing calendar body
+    final card = RRect.fromRectAndRadius(face, const Radius.circular(3));
+    canvas.drawRRect(
+      card.shift(const Offset(1.2, 1.4)),
+      Paint()..color = const Color(0x33000000),
+    );
+    canvas.drawRRect(card, Paint()..color = const Color(0xFFE8ECF0));
+    canvas.drawRRect(
+      card,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          face.topLeft,
+          face.bottomLeft,
+          const [
+            Color(0xFFF4F6F8),
+            Color(0xFFE4E8EC),
+            Color(0xFFD4D8DC),
+          ],
+          const [0.0, 0.55, 1.0],
+        ),
+    );
+
+    // Slim header strip (desk-calendar vibe)
+    final header = Rect.fromLTRB(
+      face.left,
+      face.top,
+      face.right,
+      face.top + face.height * 0.22,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(header, const Radius.circular(3)),
+      Paint()..color = const Color(0xFF5A6A7A),
+    );
+    canvas.drawRect(
+      Rect.fromLTRB(header.left, header.bottom - 2, header.right, header.bottom),
+      Paint()..color = const Color(0xFF5A6A7A),
+    );
+
+    // Soft ruled lines on the face
+    final rule = Paint()
+      ..color = const Color(0xFFB0B8C0)
+      ..strokeWidth = 0.7
+      ..style = PaintingStyle.stroke;
+    for (var i = 0; i < 3; i++) {
+      final y = face.top + face.height * (0.38 + i * 0.18);
+      canvas.drawLine(
+        Offset(face.left + face.width * 0.12, y),
+        Offset(face.right - face.width * 0.12, y),
+        rule,
+      );
+    }
+
+    // Edge stroke
+    canvas.drawRRect(
+      card,
+      Paint()
+        ..color = const Color(0xFF9AA3AC)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.9,
+    );
+  }
+
+  /// Dark leather diary resting on the hearth apron — toned into the room.
+  static void _paintFireBoard(Canvas canvas, Rect frame) {
+    final w = frame.width;
+    final h = frame.height;
+    final face = _face(frame, MemoTheme.fire);
+    final tilt = MemoBoardLayout.tiltFor(MemoTheme.fire);
+    final rng = math.Random(47);
+
+    canvas.save();
+    canvas.translate(frame.center.dx, frame.center.dy);
+    canvas.rotate(tilt);
+    canvas.translate(-frame.center.dx, -frame.center.dy);
+
+    // Floor occlusion — ash-colored, merges with hearth (not a hard game shadow)
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(face.center.dx + w * 0.02, face.bottom + h * 0.06),
+        width: face.width * 1.35,
+        height: h * 0.42,
+      ),
+      Paint()
+        ..color = const Color(0xFF0A0806).withValues(alpha: 0.7)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    );
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(face.center.dx, face.bottom + h * 0.02),
+        width: face.width * 1.05,
+        height: h * 0.18,
+      ),
+      Paint()
+        ..color = const Color(0xFF120E0A).withValues(alpha: 0.85)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+    );
+
+    // Closed leather cover — same family as mantel / surround darks
+    final cover = RRect.fromRectAndRadius(face, const Radius.circular(2));
+    canvas.drawRRect(
+      cover,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          face.topLeft,
+          face.bottomRight,
+          const [
+            Color(0xFF2A2018),
+            Color(0xFF1A1410),
+            Color(0xFF0E0A08),
+          ],
+          const [0.0, 0.45, 1.0],
+        ),
+    );
+    // Soft edge blur into the dark floor (anti “sticker”)
+    canvas.drawRRect(
+      cover.inflate(1.5),
+      Paint()
+        ..color = const Color(0xFF0A0806).withValues(alpha: 0.35)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.5)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3,
+    );
+
+    // Subtle leather grain (very low contrast)
+    for (var i = 0; i < 6; i++) {
+      final y = face.top + face.height * (0.2 + i * 0.12);
+      canvas.drawLine(
+        Offset(face.left + face.width * 0.12, y + (rng.nextDouble() - 0.5)),
+        Offset(face.right - face.width * 0.1, y + (rng.nextDouble() - 0.5) * 1.2),
+        Paint()
+          ..color = const Color(0x14C8A878)
+          ..strokeWidth = 0.6,
+      );
+    }
+
+    // Quiet soot mottling
+    for (var i = 0; i < 8; i++) {
+      canvas.drawCircle(
+        Offset(
+          face.left + face.width * rng.nextDouble(),
+          face.top + face.height * rng.nextDouble(),
+        ),
+        1.2 + rng.nextDouble() * 3,
+        Paint()
+          ..color = const Color(0x22000000)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.2),
+      );
+    }
+
+    // Spine — almost lost in shadow
+    final spine = Rect.fromLTRB(
+      face.left,
+      face.top + face.height * 0.04,
+      face.left + face.width * 0.12,
+      face.bottom - face.height * 0.04,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(spine, const Radius.circular(1)),
+      Paint()
+        ..shader = ui.Gradient.linear(
+          spine.topLeft,
+          spine.topRight,
+          const [
+            Color(0xFF080604),
+            Color(0xFF18120E),
+            Color(0xFF221810),
+          ],
+          const [0.0, 0.5, 1.0],
+        ),
+    );
+
+    // Warm fire spill — soft, low (from hearth above-left), not neon
+    canvas.drawRRect(
+      cover,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          face.topLeft,
+          face.bottomRight,
+          [
+            const Color(0x38FF9A50),
+            const Color(0x18FF7A30),
+            const Color(0x00000000),
+          ],
+          const [0.0, 0.4, 1.0],
+        ),
+    );
+
+    // Barely-there page lip (closed book)
+    canvas.drawLine(
+      Offset(face.right - 1.5, face.top + face.height * 0.12),
+      Offset(face.right - 1.5, face.bottom - face.height * 0.12),
+      Paint()
+        ..color = const Color(0x28A89070)
+        ..strokeWidth = 1.1,
+    );
+
+    // Tiny ribbon stub — soot-dulled
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(
+          face.left + face.width * 0.62,
+          face.top - h * 0.04,
+          face.width * 0.08,
+          h * 0.08,
+        ),
+        const Radius.circular(1),
+      ),
+      Paint()..color = const Color(0xFF3A2018),
+    );
+
+    // Ambient dark wash so it sits under the room mood
+    canvas.drawRRect(
+      cover,
+      Paint()
+        ..shader = ui.Gradient.radial(
+          face.center,
+          face.shortestSide * 0.85,
+          [
+            const Color(0x00000000),
+            const Color(0x44000000),
+            const Color(0x66000000),
+          ],
+          const [0.0, 0.65, 1.0],
+        ),
+    );
+
+    canvas.restore();
   }
 }

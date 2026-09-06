@@ -33,7 +33,7 @@ function findServiceAccountPath() {
   return null;
 }
 
-const THEMES = new Set(['desert', 'forest', 'ocean', 'space']);
+const THEMES = new Set(['desert', 'forest', 'ocean', 'space', 'rain', 'fire']);
 const MAX_TEXT = 80;
 const MAX_ARTIST = 40;
 const MAX_SONG = 40;
@@ -115,7 +115,25 @@ const MOOD_KEYWORDS = {
   rest: ['쉬고', '쉬엄', '잠시', '앉아', '쉴게', '쉬자', '한숨', '쉬는'],
   okay: ['괜찮', '고마', '다행', '따뜻', '좋아', '좋았', '위로', '평화'],
   night: ['밤', '새벽', '잠이', '잠 안', '불면', '오늘 밤'],
-  place: ['바람', '파도', '하늘', '별', '숲', '바다', '사막', '모래', '나무', '달'],
+  place: [
+    '바람',
+    '파도',
+    '하늘',
+    '별',
+    '숲',
+    '바다',
+    '사막',
+    '모래',
+    '나무',
+    '달',
+    '불',
+    '장작',
+    '벽난로',
+    '온기',
+    '온정',
+    '불빛',
+    '불멍',
+  ],
 };
 
 function detectMoods(memoText, hasSong) {
@@ -137,10 +155,20 @@ function detectMoods(memoText, hasSong) {
 
 function pickReplyForMemo(pool, memoText, hasSong) {
   const moods = detectMoods(memoText, hasSong);
-  const matched = pool.filter((e) => e.moods.some((t) => moods.includes(t)));
+  const usable = pool.filter((e) => {
+    const tags = Array.isArray(e.moods) ? e.moods : ['any'];
+    const text = String(e.text || '');
+    if (!hasSong) {
+      if (tags.length === 1 && tags[0] === 'song') return false;
+      if (/노래|곡까지|곡을 남|곡 남|♪/.test(text)) return false;
+    }
+    return true;
+  });
+  const base = usable.length ? usable : pool;
+  const matched = base.filter((e) => e.moods.some((t) => moods.includes(t)));
   if (matched.length) return pick(matched);
-  const soft = pool.filter((e) => e.moods.includes('any') || e.moods.length === 0);
-  return pick(soft.length ? soft : pool);
+  const soft = base.filter((e) => e.moods.includes('any') || e.moods.length === 0);
+  return pick(soft.length ? soft : base);
 }
 
 function validateReply(entry) {
@@ -173,10 +201,22 @@ function shortPreview(text, n = 36) {
 }
 
 function randomAnchor() {
-  // Soft scatter on the paper (same 0–1 space as the app).
+  const band = Math.random();
+  if (band < 0.45) {
+    return {
+      x: Number((0.08 + Math.random() * 0.78).toFixed(3)),
+      y: Number((0.58 + Math.random() * 0.32).toFixed(3)),
+    };
+  }
+  if (band < 0.75) {
+    return {
+      x: Number((0.62 + Math.random() * 0.28).toFixed(3)),
+      y: Number((0.36 + Math.random() * 0.52).toFixed(3)),
+    };
+  }
   return {
-    x: Number((0.35 + Math.random() * 0.4).toFixed(3)),
-    y: Number((0.45 + Math.random() * 0.35).toFixed(3)),
+    x: Number((0.12 + Math.random() * 0.70).toFixed(3)),
+    y: Number((0.48 + Math.random() * 0.40).toFixed(3)),
   };
 }
 

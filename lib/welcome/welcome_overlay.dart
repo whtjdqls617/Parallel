@@ -16,13 +16,13 @@ class WelcomeOverlay extends StatefulWidget {
     super.key,
     required this.host,
     required this.musicKey,
-    required this.musicTitleKey,
+    this.settingsKey,
     this.placesKey,
   });
 
   final WelcomeHost host;
   final GlobalKey musicKey;
-  final GlobalKey musicTitleKey;
+  final GlobalKey? settingsKey;
   final GlobalKey? placesKey;
 
   @override
@@ -137,9 +137,10 @@ class _WelcomeOverlayState extends State<WelcomeOverlay>
       case WelcomeStep.music:
         next = _rectForKey(widget.musicKey)?.inflate(8);
       case WelcomeStep.nature:
-        next = _rectForKey(widget.musicTitleKey)?.inflate(10);
+        next = _rectForKey(widget.settingsKey ?? widget.musicKey)?.inflate(8);
+      case WelcomeStep.places:
       case WelcomeStep.plus:
-        next = _rectForKey(widget.placesKey ?? widget.musicKey)?.inflate(6);
+        next = _rectForKey(widget.placesKey ?? widget.musicKey)?.inflate(8);
       default:
         next = null;
     }
@@ -168,7 +169,8 @@ class _WelcomeOverlayState extends State<WelcomeOverlay>
         : null;
     final needsTap = step == WelcomeStep.board ||
         step == WelcomeStep.music ||
-        step == WelcomeStep.nature;
+        step == WelcomeStep.nature ||
+        step == WelcomeStep.places;
     final showEmpty = card == null ||
         (card.line.isEmpty && (card.actions == null || card.actions!.isEmpty));
 
@@ -338,19 +340,22 @@ _WelcomeCardData _cardFor(
           hint: '이 테마에 맞춰 둔 음악이에요.',
         ),
       WelcomeStep.nature => const _WelcomeCardData(
-          line: '곡 제목을 길게 눌러 보세요.',
-          hint: '자연 소리 크기를 조절할 수 있어요.',
+          line: '왼쪽 위 설정에도 들러 보세요.',
+          hint: '배경 소리 크기를 여기서 맞출 수 있어요.',
         ),
       WelcomeStep.ownMusic => const _WelcomeCardData(
           line: '음악이 취향이 아니셔도 괜찮아요.',
           hint: '다른 거 틀어 두시고, 그냥 여기 앉아 계셔도 돼요.',
           buttonLabel: '알겠어요',
         ),
-      WelcomeStep.plus => _WelcomeCardData(
+      WelcomeStep.places => const _WelcomeCardData(
+          line: '왼쪽 위에 지도가 있어요.',
+          hint: '한번 열어 보실래요? 다른 장소로도 가실 수 있어요.\n처음은 사막에서 시작해요.',
+        ),
+      WelcomeStep.plus => const _WelcomeCardData(
           line: '일주일 동안은 다 열어둘게요.',
-          hint: '공간은 조금씩 더 늘어날 거예요.',
+          hint: '숲·바다·별·하늘·불도 천천히 둘러보세요.',
           actions: [
-            '아래쪽에서 숲·바다·별도 들어가 보세요',
             '${MemoPlace.name}에 글이랑 노래를 남겨 보세요',
             '답장은 글마다 하나만 가능해요\n누군가에겐 스쳐 가는 말이 힘이 될 수도 있어요',
             '이런 곳이 있으면 좋겠다 싶은 게 있으시면,\nparallel@gmail.com 으로 편하게 적어 주세요',
@@ -362,8 +367,8 @@ _WelcomeCardData _cardFor(
               ? '알겠어요. 편히 쉬고 계세요.'
               : '그럼 편히 쉬고 계세요.',
           hint: skippedEarly
-              ? '다시 보고 싶으시면, 아래쪽 왕관 아이콘을 길게 눌러 주세요.'
-              : '여기서의 시간이 조금이라도 도움이 되었으면 좋겠어요.\n\n다시 보고 싶으시면, 아래쪽 왕관 아이콘을 길게 눌러 주세요.',
+              ? '다시 보고 싶으시면, 왼쪽 위 설정에서 안내 다시 보기를 눌러 주세요.'
+              : '여기서의 시간이 조금이라도 도움이 되었으면 좋겠어요.\n\n다시 보고 싶으시면, 왼쪽 위 설정에서 안내 다시 보기를 눌러 주세요.',
           buttonLabel: '감사해요',
         ),
     };

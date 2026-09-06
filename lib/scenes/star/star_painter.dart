@@ -13,6 +13,7 @@ class StarPainter extends CustomPainter {
     this.sandCount = 0,
     this.sandReveal = 1,
     this.sandErase = 0,
+    this.showPresence = true,
   });
 
   final double t;
@@ -20,6 +21,9 @@ class StarPainter extends CustomPainter {
   final int sandCount;
   final double sandReveal;
   final double sandErase;
+
+  /// When false, skip companion sparks / grass presence (theme grid thumbs).
+  final bool showPresence;
 
   static const breathPeriod = 6.2;
   static const sandEraseSeconds = 1.15;
@@ -40,8 +44,10 @@ class StarPainter extends CustomPainter {
     _paintStars(canvas, size, breath);
     _paintShootingStars(canvas, size);
     _paintSteppe(canvas, size, breath);
-    _paintPresenceOnGrass(canvas, size, breath: breath);
-    _paintPresenceSpirits(canvas, size, breath: breath);
+    if (showPresence) {
+      _paintPresenceOnGrass(canvas, size, breath: breath);
+      _paintPresenceSpirits(canvas, size, breath: breath);
+    }
   }
 
   void _paintSky(Canvas canvas, Size size) {
@@ -629,5 +635,6 @@ class StarPainter extends CustomPainter {
       oldDelegate.presenceCount != presenceCount ||
       oldDelegate.sandCount != sandCount ||
       oldDelegate.sandReveal != sandReveal ||
-      oldDelegate.sandErase != sandErase;
+      oldDelegate.sandErase != sandErase ||
+      oldDelegate.showPresence != showPresence;
 }

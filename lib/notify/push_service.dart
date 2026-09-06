@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../memo/memo.dart';
 
@@ -24,6 +25,8 @@ class PushService extends ChangeNotifier {
   PushService._();
   static final PushService instance = PushService._();
 
+  static const _badgeChannel = MethodChannel('parallel/badge');
+
   StreamSubscription<String>? _tokenSub;
   StreamSubscription<RemoteMessage>? _openedSub;
   bool _started = false;
@@ -36,6 +39,16 @@ class PushService extends ChangeNotifier {
     final next = _pending;
     _pending = null;
     return next;
+  }
+
+  /// Clear the home-screen badge after the guest has checked new traces.
+  Future<void> clearAppBadge() async {
+    if (kIsWeb) return;
+    try {
+      await _badgeChannel.invokeMethod<void>('clear');
+    } catch (e) {
+      debugPrint('[Push] clearAppBadge failed: $e');
+    }
   }
 
   Future<void> start() async {

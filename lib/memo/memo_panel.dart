@@ -145,7 +145,9 @@ class _MemoPanelBodyState extends State<_MemoPanelBody> {
       MemoTheme.forest => const Color(0xFFD0C4A8),
       MemoTheme.ocean => const Color(0xFFC8D8E0),
       MemoTheme.space => const Color(0xFFC8D0E0),
+      MemoTheme.rain => const Color(0xFFC0D0E0),
       MemoTheme.desert => const Color(0xFF4A3018),
+      MemoTheme.fire => const Color(0xFFE8D4B8),
     };
     final size = MediaQuery.sizeOf(context);
     final welcome = widget.welcome;
@@ -292,10 +294,20 @@ class _WeatheredBoardPainter extends CustomPainter {
         Color(0xFF1A2038),
         Color(0xFF12162A),
       ],
+      MemoTheme.rain => const [
+        Color(0xFF3A4858),
+        Color(0xFF2A3848),
+        Color(0xFF1A2838),
+      ],
       MemoTheme.desert => const [
         Color(0xFFD2A878),
         Color(0xFFB88858),
         Color(0xFF9A6A38),
+      ],
+      MemoTheme.fire => const [
+        Color(0xFF3A2A20),
+        Color(0xFF2A1C14),
+        Color(0xFF1A100C),
       ],
     };
 
@@ -318,7 +330,9 @@ class _WeatheredBoardPainter extends CustomPainter {
           MemoTheme.forest => const Color(0xFF243028),
           MemoTheme.ocean => const Color(0xFF5A1010),
           MemoTheme.space => const Color(0xFF2A2840),
+          MemoTheme.rain => const Color(0xFF243040),
           MemoTheme.desert => const Color(0xFFC89860),
+          MemoTheme.fire => const Color(0xFF3A2818),
         },
     );
 
@@ -327,7 +341,9 @@ class _WeatheredBoardPainter extends CustomPainter {
         MemoTheme.forest => const Color(0xFF3A4434),
         MemoTheme.ocean => const Color(0xFFA03030),
         MemoTheme.space => const Color(0xFF5A6080),
+        MemoTheme.rain => const Color(0xFF4A5868),
         MemoTheme.desert => const Color(0xFFA87840),
+        MemoTheme.fire => const Color(0xFF6A4830),
       }
       ..strokeWidth = 1.1
       ..style = PaintingStyle.stroke;
@@ -335,7 +351,9 @@ class _WeatheredBoardPainter extends CustomPainter {
       MemoTheme.forest => 9,
       MemoTheme.ocean => 13,
       MemoTheme.space => 17,
+      MemoTheme.rain => 21,
       MemoTheme.desert => 3,
+      MemoTheme.fire => 27,
     });
     for (var i = 0; i < 7; i++) {
       final y = face.top + face.height * (0.12 + i * 0.12);
@@ -359,7 +377,9 @@ class _WeatheredBoardPainter extends CustomPainter {
           MemoTheme.forest => const Color(0xFF4A5A40),
           MemoTheme.ocean => const Color(0xFFB84848),
           MemoTheme.space => const Color(0xFF6A7090),
+          MemoTheme.rain => const Color(0xFF5A6878),
           MemoTheme.desert => const Color(0xFF6A4018),
+          MemoTheme.fire => const Color(0xFF8A6040),
         }
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.2,
@@ -394,7 +414,9 @@ class _MemoScrap extends StatelessWidget {
             MemoTheme.forest => const Color(0xFFF3E8C4),
             MemoTheme.ocean => const Color(0xFFF0E6D4),
             MemoTheme.space => const Color(0xFFE8E4F0),
+            MemoTheme.rain => const Color(0xFFE4EAF0),
             MemoTheme.desert => const Color(0xFFFFF0C8),
+            MemoTheme.fire => const Color(0xFFFFE8C8),
           }
         : switch (theme) {
             MemoTheme.forest =>
@@ -403,14 +425,20 @@ class _MemoScrap extends StatelessWidget {
               index.isEven ? const Color(0xFFE0E8EC) : const Color(0xFFD4DEE4),
             MemoTheme.space =>
               index.isEven ? const Color(0xFFD8DCE8) : const Color(0xFFC8CEDC),
+            MemoTheme.rain =>
+              index.isEven ? const Color(0xFFD0D8E0) : const Color(0xFFC4CCD4),
             MemoTheme.desert =>
               index.isEven ? const Color(0xFFF0E0B8) : const Color(0xFFE6D4A8),
+            MemoTheme.fire =>
+              index.isEven ? const Color(0xFFE8D0A8) : const Color(0xFFDCC098),
           };
     final ink = switch (theme) {
       MemoTheme.forest => const Color(0xFF2A3424),
       MemoTheme.ocean => const Color(0xFF1C3038),
       MemoTheme.space => const Color(0xFF1C2438),
+      MemoTheme.rain => const Color(0xFF1C2838),
       MemoTheme.desert => const Color(0xFF4A2E14),
+      MemoTheme.fire => const Color(0xFF3A2414),
     };
     final mute = ink.withValues(alpha: 0.45);
     final rot = ((index % 5) - 2) * 0.035;

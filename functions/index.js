@@ -21,6 +21,7 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { VertexAI } = require("@google-cloud/vertexai");
 const pool = require("./reply_pool.json");
+const { isAllowed } = require("./content_filter");
 
 initializeApp();
 setGlobalOptions({ region: "asia-northeast3", maxInstances: 5 });
@@ -40,7 +41,7 @@ function getVertexModel() {
   vertexModel = vertex.getGenerativeModel({
     model: GEMINI_MODEL,
     generationConfig: {
-      temperature: 0.55,
+      temperature: 0.95,
       maxOutputTokens: 220,
     },
   });
@@ -70,9 +71,26 @@ function randomDelayMs() {
 }
 
 function randomAnchor() {
+  // Wide paper scatter — keep clear of upper-left body text when possible.
+  const band = Math.random();
+  if (band < 0.45) {
+    // lower strip
+    return {
+      x: Number((0.08 + Math.random() * 0.78).toFixed(3)),
+      y: Number((0.58 + Math.random() * 0.32).toFixed(3)),
+    };
+  }
+  if (band < 0.75) {
+    // right margin
+    return {
+      x: Number((0.62 + Math.random() * 0.28).toFixed(3)),
+      y: Number((0.36 + Math.random() * 0.52).toFixed(3)),
+    };
+  }
+  // soft mid/low elsewhere
   return {
-    x: Number((0.35 + Math.random() * 0.4).toFixed(3)),
-    y: Number((0.45 + Math.random() * 0.35).toFixed(3)),
+    x: Number((0.12 + Math.random() * 0.70).toFixed(3)),
+    y: Number((0.48 + Math.random() * 0.40).toFixed(3)),
   };
 }
 
@@ -103,7 +121,25 @@ const MOOD_KEYWORDS = {
   rest: ["쉬고", "쉬엄", "잠시", "앉아", "쉴게", "쉬자", "한숨", "쉬는"],
   okay: ["괜찮", "고마", "다행", "따뜻", "좋아", "좋았", "위로", "평화"],
   night: ["밤", "새벽", "잠이", "잠 안", "불면", "오늘 밤"],
-  place: ["바람", "파도", "하늘", "별", "숲", "바다", "사막", "모래", "나무", "달"],
+  place: [
+    "바람",
+    "파도",
+    "하늘",
+    "별",
+    "숲",
+    "바다",
+    "사막",
+    "모래",
+    "나무",
+    "달",
+    "불",
+    "장작",
+    "벽난로",
+    "온기",
+    "온정",
+    "불빛",
+    "불멍",
+  ],
 };
 
 function detectMoods(memoText, hasSong) {
@@ -126,17 +162,29 @@ function detectMoods(memoText, hasSong) {
 
 function pickReplyForMemo(entries, memoText, hasSong) {
   const moods = detectMoods(memoText, hasSong);
-  const matched = entries.filter((e) => {
+  const usable = entries.filter((e) => {
+    const tags = Array.isArray(e.moods) ? e.moods : ["any"];
+    const text = String(e.text || "");
+    // Never claim the author left a song unless they did.
+    if (!hasSong) {
+      if (tags.length === 1 && tags[0] === "song") return false;
+      if (/노래|곡까지|곡을 남|곡 남|♪/.test(text)) return false;
+    }
+    return true;
+  });
+  const pool = usable.length ? usable : entries;
+
+  const matched = pool.filter((e) => {
     const tags = Array.isArray(e.moods) ? e.moods : ["any"];
     return tags.some((t) => moods.includes(t));
   });
   if (matched.length) return pick(matched);
 
-  const soft = entries.filter((e) => {
+  const soft = pool.filter((e) => {
     const tags = Array.isArray(e.moods) ? e.moods : ["any"];
     return tags.includes("any") || tags.length === 0;
   });
-  return pick(soft.length ? soft : entries);
+  return pick(soft.length ? soft : pool);
 }
 
 function pickAmbientUid(used) {
@@ -207,22 +255,29 @@ async function generateGeminiReply({ memoText, song, artist, theme }) {
       : "원문 노래: 없음";
 
   const prompt = [
-    "당신은 Parallel 앱에서 모르는 사람이 남긴 쪽지에 답하는 일반인입니다.",
-    "운영진·상담사·코치 말투 금지.",
+    "당신은 Parallel 앱에서 스쳐 가는 사람이 남긴 쪽지에 답하는 평범한 사람입니다.",
+    "운영진·상담사·코치·AI 티 나는 말투 금지.",
     "",
     "가장 중요: 원문의 핵심 말·상황에 직접 반응하세요.",
-    "예) 원문이 '기다려요' → 기다림에 대한 답 (같이 기다림, 기다릴 가치, 천천히 와도 됨 등).",
-    "예) 원문이 '피곤해요' → 피곤/쉼에 대한 답.",
-    "예) 원문이 '혼자예요' → 혼자에 대한 답.",
     "풍경·테마 비유만으로 흐리게 가지 마세요. 원문 키워드를 놓치면 실패입니다.",
     "",
-    "한국어 해요체, 1~2문장, 80자 이내.",
-    "분위기에 맞는 실제 곡을 자주 추천 (약 70%). 원문과 같은 곡 금지. 어색하면 song/artist 빈 문자열.",
+    "말투: 반말·존댓말·해요체 모두 OK. 사람마다 다르게. 같은 패턴 반복 금지.",
+    "길이: 한국어 1~2문장, 80자 이내. 따뜻하되 과하게 상담하지 말 것.",
+    "",
+    "노래 규칙 (매우 중요):",
+    `- ${songLine}`,
+    "- 원문에 노래가 없으면: text에서 '곡 남겨줘서', '노래 고른 거', '그 노래'처럼 원문이 노래를 올렸다고 말하지 말 것.",
+    "- 원문에 노래가 있을 때만 그 곡에 반응해도 됨. 같은 곡을 다시 추천하지 말 것.",
+    "- 분위기에 맞는 실제 곡 추천은 선택(약 35%). 추천할 때만 song/artist 채우고, 안 하면 둘 다 빈 문자열.",
+    "- 곡 추천은 JSON 필드로만. text에 '이 노래 들어봐: ○○'처럼 억지로 끼워 넣지 말 것.",
+    "- 가수 한국이면 이름 한글. 곡 제목은 공식 표기(한글 제목은 한글, 영어 제목은 영어).",
+    "",
     "JSON만 출력. 키: text, song, artist.",
-    '예: {"text":"기다림도 괜찮아요. 천천히 와도 돼요.","song":"Wait","artist":"M83"}',
+    '예(노래 없음): {"text":"그 말 읽으니까 괜히 숨이 느려지네.","song":"","artist":""}',
+    '예(존댓말): {"text":"그 온기, 저도 느껴졌어요. 천천히 계세요.","song":"","artist":""}',
+    '예(추천만 필드): {"text":"오늘 같은 밤에 잘 어울리는 말이네요.","song":"Holocene","artist":"Bon Iver"}',
     "",
     `테마(참고만, 답의 주제로 쓰지 말 것): ${theme || "unknown"}`,
-    songLine,
     `원문: ${body}`,
   ].join("\n");
 
@@ -385,6 +440,12 @@ async function tryPostAmbientReply(doc, entries) {
   }
 
   const memoText = String(data.text || "");
+  if (!isAllowed(memoText)) {
+    console.log(`skip ambient reply (blocked memo) ${doc.id}`);
+    await doc.ref.set({ ambientReplied: true }, { merge: true });
+    return false;
+  }
+
   const song = String(data.song || "").trim();
   const artist = String(data.artist || "").trim();
   const hasSong = song.length > 0 || artist.length > 0;
@@ -396,7 +457,15 @@ async function tryPostAmbientReply(doc, entries) {
     theme: data.theme,
   });
   let source = "gemini";
-  if (!payload?.text) {
+  // Drop replies that pretend the memo left a song when it didn't.
+  if (
+    payload?.text &&
+    !hasSong &&
+    /곡까지|곡을 남|곡 남|노래 고른|그 노래|♪/.test(payload.text)
+  ) {
+    payload = null;
+  }
+  if (!payload?.text || !isAllowed(payload.text)) {
     const entry = pickReplyForMemo(entries, memoText, hasSong);
     payload = {
       text: String(entry?.text || "").trim().slice(0, MAX_REPLY_LEN),
@@ -405,11 +474,16 @@ async function tryPostAmbientReply(doc, entries) {
     };
     source = "pool";
   }
-  if (!payload?.text) return false;
+  if (!payload?.text || !isAllowed(payload.text)) return false;
 
+  // Drop song fields if they trip the filter.
+  let replySong = String(payload.song || "").trim().slice(0, 40);
+  let replyArtist = String(payload.artist || "").trim().slice(0, 40);
+  if (!isAllowed(`${replyArtist} ${replySong}`.trim())) {
+    replySong = "";
+    replyArtist = "";
+  }
   const replyText = payload.text;
-  const replySong = String(payload.song || "").trim().slice(0, 40);
-  const replyArtist = String(payload.artist || "").trim().slice(0, 40);
 
   const ref = doc.ref;
   return db.runTransaction(async (tx) => {

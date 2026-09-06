@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -6,6 +9,11 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val versionProps = Properties().apply {
+    val f = rootProject.file("version.properties")
+    if (f.exists()) load(FileInputStream(f))
 }
 
 android {
@@ -28,8 +36,9 @@ android {
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        // Independent of iOS — edit android/version.properties
+        versionCode = versionProps.getProperty("versionCode", "1").toInt()
+        versionName = versionProps.getProperty("versionName", "1.0.0")
     }
 
     buildTypes {

@@ -37,7 +37,7 @@ function findServiceAccountPath() {
   return null;
 }
 
-const THEMES = new Set(['desert', 'forest', 'ocean', 'space']);
+const THEMES = new Set(['desert', 'forest', 'ocean', 'space', 'rain', 'fire']);
 const MAX_TEXT = 80;
 const MAX_ARTIST = 40;
 const MAX_SONG = 40;
@@ -131,7 +131,7 @@ async function postOne(db, entry) {
 
 function usage() {
   console.log(`Usage:
-  node post_ambient_memo.mjs [--count N] [--theme desert|forest|ocean|space]
+  node post_ambient_memo.mjs [--count N] [--theme desert|forest|ocean|space|rain|fire]
   node post_ambient_memo.mjs --all-themes
   node post_ambient_memo.mjs --theme desert --text "직접 쓴 글" [--song "..."] [--artist "..."]
   node post_ambient_memo.mjs --dry-run

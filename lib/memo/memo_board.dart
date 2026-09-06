@@ -11,6 +11,7 @@ import 'memo_panel.dart';
 import 'memo_reply_inbox.dart';
 import 'memo_reveal_controller.dart';
 import 'memo_service.dart';
+import '../subscription/subscription_config.dart';
 import '../subscription/subscription_gate.dart';
 import '../subscription/subscription_service.dart';
 import '../welcome/welcome_scope.dart';
@@ -59,6 +60,14 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
       _reveal.pool,
       _service.currentUid,
     );
+    if (!next) {
+      unawaited(
+        MemoReplyInbox.instance.clearBadgeIfCaughtUp(
+          _reveal.pool,
+          _service.currentUid,
+        ),
+      );
+    }
     if (next == _hasUnreadReply) return;
     setState(() => _hasUnreadReply = next);
   }
@@ -99,16 +108,30 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
 
   Future<void> _compose() async {
     if (_submitting) return;
-    if (!SubscriptionService.instance.hasPlusAccess) {
-      await showSubscriptionGate(
-        context,
-        reason: SubscriptionService.instance.trialEnded
-            ? '체험이 끝났어요. 흔적을 남기려면 Parallel Plus가 필요해요. 읽기는 누구나 할 수 있어요.'
-            : '흔적을 남기려면 Parallel Plus가 필요해요. 읽기는 누구나 할 수 있어요.',
-      );
-      return;
+
+    final unlimited = SubscriptionService.instance.hasPlusAccess;
+    if (!unlimited) {
+      final uid = _service.currentUid;
+      if (uid != null) {
+        try {
+          final used = await _service.countCreatedToday(uid);
+          if (!mounted) return;
+          if (used >= SubscriptionConfig.freeMemosPerDay) {
+            await showSubscriptionGate(
+              context,
+              reason: subscriptionGateReason(
+                '오늘은 이미 한 장 남겼어요. Plus면 무제한으로 남길 수 있어요.',
+              ),
+            );
+            return;
+          }
+        } catch (e) {
+          debugPrint('quota check failed: $e');
+        }
+      }
     }
 
+    if (!mounted) return;
     final draft = await showMemoComposeSheet(
       context,
       theme: widget.theme,
@@ -122,8 +145,25 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
         text: draft.text,
         artist: draft.artist,
         song: draft.song,
+        unlimited: unlimited,
       );
       _pendingPreferId = created.id;
+    } on MemoWriteException catch (e) {
+      if (!mounted) return;
+      if (e.message.contains('Plus')) {
+        await showSubscriptionGate(
+          context,
+          reason: subscriptionGateReason(e.message),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     } catch (e, st) {
       debugPrint('Memo create failed: $e\n$st');
       if (!mounted) return;
@@ -147,7 +187,7 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
         context,
         theme: widget.theme,
         memos: _reveal.pool,
-        canCompose: SubscriptionService.instance.hasPlusAccess,
+        canCompose: true,
         onCompose: _compose,
         service: _service,
         welcome: welcome,
@@ -170,6 +210,61 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
         final frame = MemoBoardLayout.frameRect(sceneSize, widget.theme);
         final face = MemoBoardLayout.faceRect(sceneSize, widget.theme);
         final teasers = _reveal.visibleMemos;
+        final tilt = MemoBoardLayout.tiltFor(widget.theme);
+
+        Widget boardHit = Positioned(
+          left: frame.left,
+          top: frame.top,
+          width: frame.width,
+          height: frame.height,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _openPanel,
+          ),
+        );
+        if (tilt != 0) {
+          boardHit = Positioned(
+            left: frame.left,
+            top: frame.top,
+            width: frame.width,
+            height: frame.height,
+            child: Transform.rotate(
+              angle: tilt,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _openPanel,
+              ),
+            ),
+          );
+        }
+
+        Widget? teaserLayer;
+        if (teasers.isNotEmpty) {
+          Widget notes = Stack(
+            clipBehavior: Clip.none,
+            children: [
+              for (var i = 0; i < teasers.length; i++)
+                _TeaserNote(
+                  key: ValueKey(teasers[i].id),
+                  theme: widget.theme,
+                  faceSize: face.size,
+                  index: i,
+                  mine: teasers[i].isOwnedBy(_service.currentUid),
+                  onTap: _openPanel,
+                ),
+            ],
+          );
+          if (tilt != 0) {
+            notes = Transform.rotate(angle: tilt, child: notes);
+          }
+          teaserLayer = Positioned(
+            left: face.left,
+            top: face.top,
+            width: face.width,
+            height: face.height,
+            child: notes,
+          );
+        }
 
         return Stack(
           fit: StackFit.expand,
@@ -179,37 +274,8 @@ class _MemoBoardLayerState extends State<MemoBoardLayer> {
               painter: _MemoPropPainter(theme: widget.theme),
               size: Size.infinite,
             ),
-            Positioned(
-              left: frame.left,
-              top: frame.top,
-              width: frame.width,
-              height: frame.height,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _openPanel,
-              ),
-            ),
-            if (teasers.isNotEmpty)
-              Positioned(
-                left: face.left,
-                top: face.top,
-                width: face.width,
-                height: face.height,
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    for (var i = 0; i < teasers.length; i++)
-                      _TeaserNote(
-                        key: ValueKey(teasers[i].id),
-                        theme: widget.theme,
-                        faceSize: face.size,
-                        index: i,
-                        mine: teasers[i].isOwnedBy(_service.currentUid),
-                        onTap: _openPanel,
-                      ),
-                  ],
-                ),
-              ),
+            boardHit,
+            ?teaserLayer,
             if (_hasUnreadReply)
               Builder(
                 builder: (context) {
@@ -280,13 +346,17 @@ class _NewTraceCueState extends State<_NewTraceCue>
       MemoTheme.forest => const Color(0xFFE8F0D8),
       MemoTheme.ocean => const Color(0xFFE0F0F4),
       MemoTheme.space => const Color(0xFFE8E4F4),
+      MemoTheme.rain => const Color(0xFFE0E8F0),
       MemoTheme.desert => const Color(0xFFFFF4E0),
+      MemoTheme.fire => const Color(0xFFFFE8C8),
     };
     final glow = switch (widget.theme) {
       MemoTheme.forest => const Color(0xFF9CF070),
       MemoTheme.ocean => const Color(0xFFB8E8FF),
       MemoTheme.space => const Color(0xFFE8E0D0),
+      MemoTheme.rain => const Color(0xFFA8C8E0),
       MemoTheme.desert => const Color(0xFFFFD090),
+      MemoTheme.fire => const Color(0xFFFFA858),
     };
 
     return AnimatedBuilder(
@@ -297,7 +367,9 @@ class _NewTraceCueState extends State<_NewTraceCue>
           MemoTheme.forest => const Color(0xFF3A4A28),
           MemoTheme.ocean => const Color(0xFF1C3038),
           MemoTheme.space => const Color(0xFF2A2840),
+          MemoTheme.rain => const Color(0xFF1C2838),
           MemoTheme.desert => const Color(0xFF6A4018),
+          MemoTheme.fire => const Color(0xFF3A2414),
         };
         return Container(
           padding: const EdgeInsets.fromLTRB(7, 4, 9, 4),
@@ -428,7 +500,9 @@ class _TeaserNoteState extends State<_TeaserNote>
             MemoTheme.forest => const Color(0xFFF3E8C4),
             MemoTheme.ocean => const Color(0xFFF0E6D4),
             MemoTheme.space => const Color(0xFFE8E4F0),
+            MemoTheme.rain => const Color(0xFFE4EAF0),
             MemoTheme.desert => const Color(0xFFFFF0C8),
+            MemoTheme.fire => const Color(0xFFFFE8C8),
           }
         : switch (widget.theme) {
             MemoTheme.forest =>
@@ -437,8 +511,12 @@ class _TeaserNoteState extends State<_TeaserNote>
               slot.isEven ? const Color(0xFFD0DCE0) : const Color(0xFFC4D0D6),
             MemoTheme.space =>
               slot.isEven ? const Color(0xFFD8DCE8) : const Color(0xFFC8CEDC),
+            MemoTheme.rain =>
+              slot.isEven ? const Color(0xFFD0D8E0) : const Color(0xFFC4CCD4),
             MemoTheme.desert =>
               slot.isEven ? const Color(0xFFE2D0A8) : const Color(0xFFD8C498),
+            MemoTheme.fire =>
+              slot.isEven ? const Color(0xFFE8D0A8) : const Color(0xFFDCC098),
           };
     final angle = slot == 0 ? -0.06 : slot == 1 ? 0.05 : -0.03;
 
@@ -512,8 +590,7 @@ class _MemoPropPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _MemoPropPainter oldDelegate) =>
-      oldDelegate.theme != theme;
+  bool shouldRepaint(covariant _MemoPropPainter oldDelegate) => true;
 
   @override
   bool hitTest(Offset position) => false;
